@@ -645,7 +645,7 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
         # Ensure v1.2 schema fields exist (migration from v1.0/v1.1)
         stats.setdefault("version", "1.2")
         stats.setdefault("routes", {}).setdefault("orchestrated", 0)
-        stats.setdefault("exceptions", {"router_meta": 0, "slash_commands": 0})
+        stats.setdefault("exceptions", {"router_meta": 0, "slash_commands": 0, "explicit_route": 0, "explicit_retry": 0})
         stats.setdefault("tool_intensive_queries", 0)
         stats.setdefault("orchestrated_queries", 0)
         stats.setdefault("delegation_savings", 0.0)
@@ -714,9 +714,10 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
             json.dump(stats, f, indent=2)
             unlock_file(f)
 
-    except Exception:
-        # Don't fail the hook if stats logging fails
-        pass
+    except Exception as e:
+        # Don't fail the hook if stats logging fails, but log to stderr for debugging
+        import sys as _sys
+        print(f"[claude-router] Stats update failed: {e}", file=_sys.stderr)
 
 
 def classify_by_rules(prompt: str) -> dict:
@@ -957,6 +958,9 @@ def main():
                 route, subagent, model = model_map[first_word]
                 query = " ".join(route_args.split()[1:])  # Rest after model
 
+                # Log explicit route command to stats
+                log_routing_decision(route, 1.0, "explicit", [f"/route {first_word}"], {"exception_type": "explicit_route"})
+
                 context = f"""[Claude Router] EXPLICIT MODEL OVERRIDE
 Route: {route} | Model: {model} | Source: User specified "{first_word}"
 
@@ -992,6 +996,9 @@ Task(subagent_type="claude-router:{subagent}", prompt="{query}", description="Ro
             if retry_args in retry_model_map:
                 route, subagent, model = retry_model_map[retry_args]
 
+                # Log explicit retry command to stats
+                log_routing_decision(route, 1.0, "explicit", [f"/retry {retry_args}"], {"exception_type": "explicit_retry"})
+
                 context = f"""[Claude Router] EXPLICIT RETRY OVERRIDE
 Route: {route} | Model: {model} | Source: User specified "/retry {retry_args}"
 
@@ -1012,7 +1019,10 @@ Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>
                 print(json.dumps(output))
                 sys.exit(0)
 
-        # Skip other slash commands (let skills handle them)
+        # Log slash command to stats (skills handle the actual command)
+        # Extract command name for tracking
+        cmd_name = stripped.split()[0] if stripped.split() else "/"
+        log_routing_decision("deep", 1.0, "slash_command", [cmd_name], {"exception_type": "slash_commands"})
         sys.exit(0)
 
     # Check for exception queries (router meta-questions)
