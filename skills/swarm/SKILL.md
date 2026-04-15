@@ -22,10 +22,11 @@ When invoked, immediately spawn the swarm-coordinator agent with the user's task
 Agent(
   description="Coordinate swarm for: <brief task summary>",
   prompt="$ARGUMENTS",
-  subagent_type="claude-router:swarm-coordinator",
-  model="opus"
+  subagent_type="claude-router:swarm-coordinator"
 )
 ```
+
+Note: Do NOT pass a `model` parameter. The swarm-coordinator's frontmatter already declares `model: claude-opus-4-5-20251101` as the single source of truth. Passing `model="opus"` here creates two sources of truth that can drift and cause the coordinator to run on the wrong model.
 
 The swarm-coordinator will:
 1. Decompose the task into 5-30 parallel subtasks

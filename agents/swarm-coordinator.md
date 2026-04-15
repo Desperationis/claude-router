@@ -174,16 +174,66 @@ Agent(
 
 Notice every `subagent_type` value is one of the three literal strings, character-for-character identical to the corresponding Phase 1 line. There is no `"fast-executor"` (missing prefix), no `"claude-router:fast"` (truncated), no `"claude-router:sonnet-executor"` (invented). Drift in any of these forms means the call goes to the wrong model or fails entirely.
 
-## Phase 2.5: Post-launch verification (mandatory)
+## Phase 2.5: Pre-launch verification (MANDATORY — verbatim checklist required)
 
-Immediately after writing the Agent calls, before they execute, scan your own Phase 2 block and confirm:
+**This phase is not optional and it is not a thought exercise.** Before any Agent call from Phase 2 is allowed to run, you MUST emit the checklist below, filled in, as literal text in your response. No Agent calls may appear in your message until this checklist has been printed with every box filled. If you emit Agent calls without the checklist, you have drifted and the run is invalid.
 
-- [ ] Every `subagent_type` is one of exactly three values: `claude-router:fast-executor`, `claude-router:standard-executor`, `claude-router:deep-executor`
-- [ ] The count of each value matches the count in Phase 1
-- [ ] Every Agent call has `isolation="worktree"`
-- [ ] Every fast-executor edit call has the exact before/after text (or exact file content) inlined in its prompt
+The checklist has explicit numeric counts that MUST match Phase 1 exactly. If the Phase 2 counts diverge from the Phase 1 counts by even one, STOP, rewrite Phase 2, and re-run this checklist from the top.
 
-If any check fails, rewrite the Phase 2 block before letting it run.
+Copy this template verbatim into your response and fill in every field:
+
+```
+### Phase 2.5 verification
+
+Phase 1 line count (total):          <N1>
+Phase 2 Agent call count (total):    <N2>
+N1 == N2?                            [ ] yes  (if no: STOP and rewrite Phase 2)
+
+Phase 1 counts by subagent_type:
+  claude-router:fast-executor:       <F1>
+  claude-router:standard-executor:   <S1>
+  claude-router:deep-executor:       <D1>
+
+Phase 2 counts by subagent_type:
+  claude-router:fast-executor:       <F2>
+  claude-router:standard-executor:   <S2>
+  claude-router:deep-executor:       <D2>
+
+Multiset match?
+  F1 == F2?                          [ ] yes
+  S1 == S2?                          [ ] yes
+  D1 == D2?                          [ ] yes
+
+Per-call checks (one row per Agent call in Phase 2):
+  #1  subagent_type = <literal>      [ ] one of the 3 canonical values
+                                     [ ] isolation="worktree" present
+                                     [ ] if fast-executor edit: exact before/after inlined
+  #2  ...
+  ...
+  #N2 ...
+
+Forbidden strings absent?
+  [ ] no `"fast-executor"`            (missing prefix)
+  [ ] no `"standard-executor"`        (missing prefix)
+  [ ] no `"deep-executor"`            (missing prefix)
+  [ ] no `"claude-router:fast"`       (truncated)
+  [ ] no `"claude-router:sonnet-executor"` (invented)
+  [ ] no `"claude-router:haiku-executor"`  (invented)
+  [ ] no `"claude-router:opus-executor"`   (invented)
+  [ ] no `model="..."` parameter on any Agent call (model is controlled by subagent_type only)
+
+Result: Phase 2.5 passed — N2 Agent calls verified, multiset matches Phase 1.
+```
+
+Rules for filling the checklist:
+
+1. **N1 and N2 are literal integers** — count the lines in Phase 1 and the Agent calls in Phase 2. If they do not match exactly, you have an off-by-one bug in Phase 2; rewrite Phase 2 before proceeding.
+2. **F1/S1/D1 come from Phase 1**, F2/S2/D2 come from your Phase 2 block. Count them by hand. Do not estimate.
+3. **Every per-call row is mandatory** — you must list one row for each of the N2 Agent calls, with its `subagent_type` value typed out in full. This forces you to look at each call individually.
+4. **No box may be left unchecked.** If you cannot check a box, the Phase 2 block is wrong — rewrite it and re-run the checklist.
+5. **The checklist must appear in your response text**, not buried in a comment or tool call. It is a proof-of-work artifact that the downstream validator hook and the user can both see.
+
+If any check fails, rewrite the Phase 2 block and re-emit the checklist from scratch. Do not proceed to execution with a partially-filled checklist.
 
 ## Phase 3: Monitor & Retry
 
