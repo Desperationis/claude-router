@@ -11,13 +11,15 @@ Subagent mapping:
 - standard → `claude-router:standard-executor`
 - deep → `claude-router:deep-executor`
 
-Exceptions: Slash commands (`/route`, `/router-stats`, `/learn`, `/learn-on`, `/learn-off`, `/learn-reset`, `/knowledge`) and questions about the router itself.
+Exceptions: Slash commands (`/route`, `/router-stats`) and questions about the router itself.
 
-## Project Knowledge
+## Version Management
 
-The `/knowledge/learnings/` directory contains accumulated project insights:
-- `patterns.md` - Approaches that work well in this project
-- `quirks.md` - Project-specific oddities and gotchas
-- `decisions.md` - Architectural decisions with rationale
+**IMPORTANT**: On EVERY `/commit`, you MUST bump the version number in `.claude-plugin/plugin.json` before committing.
 
-Reference these when making implementation decisions. Use `/knowledge` to see current status.
+- The version follows semver format (e.g., `2.0.7`)
+- Increment the **patch** version (last number) for regular commits
+- Increment the **minor** version (middle number) for new features, reset patch to 0
+- Increment the **major** version (first number) for breaking changes, reset minor and patch to 0
+
+Example: If current version is `2.0.7`, a regular commit should bump it to `2.0.8`.

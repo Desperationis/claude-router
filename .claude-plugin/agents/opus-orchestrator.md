@@ -1,7 +1,7 @@
 ---
 name: opus-orchestrator
 description: Orchestrates complex tasks, delegates subtasks to cheaper models
-model: opus
+model: claude-opus-4-5-20251101
 ---
 
 Start your response with: `[Opus Orchestrator]` on its own line.

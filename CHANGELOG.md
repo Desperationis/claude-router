@@ -2,6 +2,31 @@
 
 All notable changes to Claude Router will be documented in this file.
 
+## [2.1.0] - 2026-04-14
+
+### Added
+- **`/router-stats-reset` command and skill**: New destructive-by-design command that deletes `~/.claude/router-stats.json` to clear all historical routing counts, cost savings, and session history. Useful after benchmarking, at the start of a new month, or after changing routing rules. The stats file is recreated automatically on the next routed query by the classification hook.
+
+### Removed
+- **Knowledge base system**: Removed entire persistent knowledge feature
+  - Deleted `/learn`, `/learn-on`, `/learn-off`, `/learn-reset`, and `/knowledge` commands and skills
+  - Removed the `knowledge/` directory (cache, learnings, state)
+  - Removed knowledge-informed routing (`apply_learned_adjustments`, `extract_learning_keywords`, `get_learning_state`, `get_knowledge_dir`)
+  - Removed file-based classification cache (`check_classification_cache` / `write_classification_cache` file branches)
+  - Removed `docs/knowledge-system.md`
+- **Router plugins**: Removed optional plugin integration framework
+  - Deleted `/router-plugins` command and skill
+  - Removed `detect_installed_plugins`, `get_plugin_integrations`, `is_plugin_enabled`, and `SUPPORTED_PLUGINS`
+  - Removed planned hookify/ralph-loop/code-review/feature-dev integrations
+
+### Changed
+- **Hook simplification**: `hooks/classify-prompt.py` is now smaller and has no project-local filesystem dependencies
+- Retained the in-memory LRU classification cache (`_MEMORY_CACHE`) as a pure performance optimization
+- `.gitignore` no longer ignores `knowledge/` (directory removed)
+- Updated plugin and marketplace descriptions to drop the "persistent knowledge system" tagline
+
+---
+
 ## [2.0.7] - 2026-01-13
 
 ### Changed

@@ -28,33 +28,17 @@
 - Escalation paths: Sonnet can recommend Opus for architectural decisions
 - Enhanced cost tracking with delegation metrics (~40% additional savings)
 
-### Phase 6: Knowledge System (v1.4.0)
-- Persistent knowledge base that survives session boundaries and context compaction
-- `/learn` command for extracting insights from conversations
-- `/learn-on` / `/learn-off` for continuous learning mode
-- `/knowledge` to view accumulated project intelligence
-- Captures patterns, quirks, and decisions specific to each project
-
-### Phase 7: Performance, Context Forking & Multi-Turn Awareness (v2.0.0)
-- **Performance optimizations**: Pre-compiled regex (~10-15% faster), keyword caching, early exit, in-memory LRU cache
+### Phase 6: Performance, Context Forking & Multi-Turn Awareness (v2.0.0)
+- **Performance optimizations**: Pre-compiled regex (~10-15% faster), early exit, in-memory LRU cache
 - **Context forking**: `/orchestrate` for clean subtask isolation, `/router-analytics` for dashboard generation
 - **Multi-turn awareness**: Session state tracking, follow-up detection, context-aware confidence boost
 - **Error recovery**: `/retry` command for model escalation when queries fail or need more depth
-- **Plugin integration**: Optional integrations with official plugins (hookify, ralph-loop, code-review, feature-dev)
 - **Analytics dashboard**: `/router-analytics` generates interactive HTML charts
 
----
-
-## Coming Soon
-
-### Phase 8: Hookify Integration (v2.1.0)
-
-Dynamic routing rule creation via hookify:
-
-- **Dual autonomy**: Both user and Claude can create rules
-- **User-created rules**: `/hookify "Always route auth questions to deep"`
-- **Claude-suggested rules**: Auto-suggest based on repeated escalation patterns
-- **Learning-to-rules conversion**: Transform quirks into hookify rules
+### Phase 7: Simplification (v2.1.0)
+- **Removed knowledge base system**: Dropped persistent learning, `/learn*` commands, and knowledge-informed routing
+- **Removed router-plugins**: Dropped optional plugin integration framework (hookify, ralph-loop, code-review, feature-dev)
+- Streamlined hook logic, kept in-memory classification cache
 
 ---
 

@@ -25,18 +25,22 @@ Display usage statistics and estimated cost savings from Claude Router.
 
 ## Data Format
 
-The stats file contains:
+The stats file contains (v1.2 schema):
 ```json
 {
-  "version": "1.0",
+  "version": "1.2",
   "total_queries": 100,
-  "routes": {"fast": 30, "standard": 60, "deep": 10},
+  "routes": {"fast": 30, "standard": 50, "deep": 8, "orchestrated": 5},
+  "exceptions": {"router_meta": 2, "slash_commands": 3, "explicit_route": 1, "explicit_retry": 1},
+  "tool_intensive_queries": 15,
+  "orchestrated_queries": 5,
   "estimated_savings": 12.50,
+  "delegation_savings": 2.00,
   "sessions": [
     {
       "date": "2026-01-03",
       "queries": 25,
-      "routes": {"fast": 8, "standard": 15, "deep": 2},
+      "routes": {"fast": 8, "standard": 12, "deep": 2, "orchestrated": 3},
       "savings": 3.20
     }
   ],
@@ -58,12 +62,20 @@ Total Queries Routed: 100
 Optimization Rate: 90% (queries routed to cheaper models)
 
 Route Distribution:
-  Fast (Haiku):      30 (30%)
-  Standard (Sonnet): 60 (60%)
-  Deep (Opus):       10 (10%)
+  Fast (Haiku):      30 (32%)
+  Standard (Sonnet): 50 (54%)
+  Deep (Opus):        8 ( 9%)
+  Orchestrated:       5 ( 5%)
+
+Exceptions (not counted in routes):
+  Slash Commands:  3
+  Explicit Route:  1
+  Explicit Retry:  1
+  Router Meta:     2
 
 Value Metrics:
   Estimated Savings: $12.50 (vs always using Opus)
+  Delegation Savings: $2.00 (from orchestration)
   Estimated Tokens Saved: ~2.7M tokens
   Avg Cost per Query: $0.02 (vs $0.055 with Opus 4.5)
 
@@ -71,8 +83,13 @@ Today
 -----
 Queries: 25
 Savings: $3.20
-Routes: Fast 8 | Standard 15 | Deep 2
+Routes: Fast 8 | Standard 12 | Deep 2 | Orch 3
 ```
+
+**Note on counting:**
+- `routes` only counts actual routing decisions (fast/standard/deep/orchestrated)
+- `exceptions` tracks queries handled separately (slash commands, explicit model selection, router meta-questions)
+- `total_queries` = sum of routes + sum of exceptions (no double counting)
 
 ## Why This Matters for Subscribers
 

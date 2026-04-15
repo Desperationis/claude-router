@@ -54,15 +54,10 @@ echo '{"prompt": "What is the syntax for a Python list?"}' | python3 hooks/class
    - Fix false positives/negatives
    - Add language-specific patterns
 
-2. **Context-Aware Routing (Phase 5)**
+2. **Context-Aware Routing**
    - Factor in number of files open
    - Consider session history
    - Adjust based on error patterns
-
-3. **Learning from Feedback (Phase 6)**
-   - Track user overrides
-   - Adjust future routing based on patterns
-   - Per-project routing profiles
 
 ### Good First Issues
 

@@ -60,14 +60,7 @@ EXCEPTION_PATTERNS = [
     re.compile(r'\bclassif(y|ication)\b.*\b(prompt|query)'),
 ]
 
-# Classification cache settings
-CACHE_MAX_ENTRIES = 100
-CACHE_TTL_DAYS = 30
-
-# In-memory cache for extracted learning keywords (mtime-based invalidation)
-_KEYWORDS_CACHE = {"keywords": None, "mtime": 0}
-
-# In-memory classification cache (avoids file I/O for repeated queries in same session)
+# In-memory classification cache (avoids recomputation for repeated queries in same session)
 # LRU-style: limited to 50 entries, cleared on process restart
 _MEMORY_CACHE = {}
 _MEMORY_CACHE_MAX = 50
@@ -83,44 +76,6 @@ FOLLOW_UP_PATTERNS = [
     re.compile(r"^(do that|go ahead|proceed|continue|keep going)"),
     re.compile(r"^(actually|wait|instead|rather)"),
 ]
-
-# Official plugins that claude-router can integrate with (optional)
-SUPPORTED_PLUGINS = ["hookify", "ralph-loop", "code-review", "feature-dev"]
-
-
-def detect_installed_plugins() -> dict:
-    """Check which official plugins are installed."""
-    detected = {}
-    # Check common plugin locations
-    plugin_locations = [
-        Path.home() / ".claude" / "plugins",
-        Path.home() / ".config" / "claude-code" / "plugins",
-    ]
-    for plugin in SUPPORTED_PLUGINS:
-        detected[plugin] = False
-        for loc in plugin_locations:
-            if (loc / plugin).exists() or (loc / f"{plugin}.md").exists():
-                detected[plugin] = True
-                break
-    return detected
-
-
-def get_plugin_integrations() -> dict:
-    """Get plugin integration states from knowledge state."""
-    state = get_learning_state()
-    return state.get("plugin_integrations", {
-        plugin: {"enabled": False, "detected": False}
-        for plugin in SUPPORTED_PLUGINS
-    })
-
-
-def is_plugin_enabled(plugin_name: str) -> bool:
-    """Check if a plugin integration is both detected and enabled."""
-    integrations = get_plugin_integrations()
-    plugin = integrations.get(plugin_name, {})
-    detected = detect_installed_plugins().get(plugin_name, False)
-    enabled = plugin.get("enabled", False)
-    return detected and enabled
 
 
 def get_session_state() -> dict:
@@ -189,19 +144,6 @@ def apply_context_boost(result: dict, session_state: dict, is_follow_up: bool) -
     return result
 
 
-def get_knowledge_dir() -> Path:
-    """Get the knowledge directory path (project-local)."""
-    # Try to find knowledge/ relative to this script's location
-    script_dir = Path(__file__).parent.parent  # Go up from hooks/ to project root
-    knowledge_dir = script_dir / "knowledge"
-    if knowledge_dir.exists():
-        return knowledge_dir
-    # Fallback: check current working directory
-    cwd_knowledge = Path.cwd() / "knowledge"
-    if cwd_knowledge.exists():
-        return cwd_knowledge
-    return None
-
 def generate_fingerprint(prompt: str) -> str:
     """Generate a fingerprint for a prompt to enable fuzzy cache matching."""
     # Normalize: lowercase, strip, collapse whitespace
@@ -224,75 +166,29 @@ def generate_fingerprint(prompt: str) -> str:
     # Generate hash
     return hashlib.md5(fingerprint_str.encode()).hexdigest()[:12]
 
-def check_classification_cache(prompt: str) -> dict:
-    """Check if a similar query exists in the cache.
 
-    Checks in-memory cache first (fastest), then falls back to file cache.
-    """
+def check_classification_cache(prompt: str) -> dict:
+    """Check if a similar query exists in the in-memory cache."""
     fingerprint = generate_fingerprint(prompt)
 
-    # Check in-memory cache first (no I/O)
+    # Check in-memory cache (no I/O)
     if fingerprint in _MEMORY_CACHE:
         result = _MEMORY_CACHE[fingerprint].copy()
         result["metadata"] = result.get("metadata", {})
         result["metadata"]["memory_cache_hit"] = True
         return result
 
-    try:
-        knowledge_dir = get_knowledge_dir()
-        if not knowledge_dir:
-            return None
+    return None
 
-        cache_file = knowledge_dir / "cache" / "classifications.md"
-        if not cache_file.exists():
-            return None
-
-        with open(cache_file, 'r') as f:
-            content = f.read()
-
-        # Look for matching fingerprint section
-        pattern = rf'## \[{fingerprint}\].*?(?=\n## \[|$)'
-        match = re.search(pattern, content, re.DOTALL)
-
-        if not match:
-            return None
-
-        entry = match.group(0)
-
-        # Parse the cached entry
-        route_match = re.search(r'\*\*Route:\*\* (\w+)', entry)
-        conf_match = re.search(r'\*\*Confidence:\*\* ([\d.]+)', entry)
-
-        if route_match and conf_match:
-            result = {
-                "route": route_match.group(1),
-                "confidence": float(conf_match.group(1)),
-                "signals": ["cache_hit"],
-                "method": "cache",
-                "metadata": {"cache_hit": True, "fingerprint": fingerprint}
-            }
-            # Populate memory cache for faster subsequent lookups
-            _MEMORY_CACHE[fingerprint] = result.copy()
-            return result
-
-        return None
-    except Exception:
-        # Cache errors should never break classification
-        return None
 
 def write_classification_cache(prompt: str, result: dict):
-    """Write a classification result to the cache.
-
-    Writes to both in-memory cache (fast) and file cache (persistent).
-    """
+    """Write a classification result to the in-memory cache."""
     global _MEMORY_CACHE
 
     fingerprint = generate_fingerprint(prompt)
 
-    # Write to memory cache first (always, even if file cache fails)
     # Simple LRU: if at max, remove oldest entry
     if len(_MEMORY_CACHE) >= _MEMORY_CACHE_MAX:
-        # Remove first (oldest) entry
         oldest_key = next(iter(_MEMORY_CACHE))
         del _MEMORY_CACHE[oldest_key]
     _MEMORY_CACHE[fingerprint] = {
@@ -302,200 +198,6 @@ def write_classification_cache(prompt: str, result: dict):
         "method": "cache",
     }
 
-    try:
-        knowledge_dir = get_knowledge_dir()
-        if not knowledge_dir:
-            return
-
-        cache_file = knowledge_dir / "cache" / "classifications.md"
-        if not cache_file.exists():
-            return
-
-        # fingerprint already generated above for memory cache
-        today = datetime.now().strftime("%Y-%m-%d")
-
-        # Read existing cache
-        with open(cache_file, 'r') as f:
-            content = f.read()
-
-        # Check if this fingerprint already exists
-        if f'## [{fingerprint}]' in content:
-            # Update last used date and hit count
-            pattern = rf'(## \[{fingerprint}\].*?\*\*Last used:\*\* )\d{{4}}-\d{{2}}-\d{{2}}'
-            content = re.sub(pattern, rf'\g<1>{today}', content, flags=re.DOTALL)
-
-            hit_pattern = rf'(## \[{fingerprint}\].*?\*\*Hit count:\*\* )(\d+)'
-            hit_match = re.search(hit_pattern, content, re.DOTALL)
-            if hit_match:
-                new_count = int(hit_match.group(2)) + 1
-                content = re.sub(hit_pattern, rf'\g<1>{new_count}', content, flags=re.DOTALL)
-
-            with open(cache_file, 'w') as f:
-                lock_file(f, exclusive=True)
-                f.write(content)
-                unlock_file(f)
-            return
-
-        # Create new entry
-        # Truncate prompt for storage (first 50 chars + pattern type)
-        prompt_preview = prompt[:50].replace('\n', ' ')
-        if len(prompt) > 50:
-            prompt_preview += "..."
-
-        entry = f"""
-## [{fingerprint}]
-- **Query pattern:** "{prompt_preview}"
-- **Route:** {result["route"]}
-- **Confidence:** {result["confidence"]:.2f}
-- **Last used:** {today}
-- **Hit count:** 1
-"""
-
-        # Count existing entries
-        entry_count = len(re.findall(r'^## \[', content, re.MULTILINE))
-
-        # If at max, evict oldest entry (by last used date)
-        if entry_count >= CACHE_MAX_ENTRIES:
-            # Find all entries with their dates
-            entries = re.findall(r'(## \[[^\]]+\].*?\*\*Last used:\*\* (\d{4}-\d{2}-\d{2}).*?)(?=\n## \[|$)',
-                                content, re.DOTALL)
-            if entries:
-                # Sort by date and remove oldest
-                entries_sorted = sorted(entries, key=lambda x: x[1])
-                oldest_entry = entries_sorted[0][0]
-                content = content.replace(oldest_entry, '')
-
-        # Append new entry
-        content = content.rstrip() + '\n' + entry
-
-        # Update frontmatter entry count
-        new_count = len(re.findall(r'^## \[', content, re.MULTILINE))
-        content = re.sub(r'entry_count: \d+', f'entry_count: {new_count}', content)
-        content = re.sub(r'last_updated: .*', f'last_updated: "{datetime.now().isoformat()}"', content)
-
-        with open(cache_file, 'w') as f:
-            lock_file(f, exclusive=True)
-            f.write(content)
-            unlock_file(f)
-
-    except Exception:
-        # Cache errors should never break classification
-        pass
-
-def get_learning_state() -> dict:
-    """Get the current learning state."""
-    try:
-        knowledge_dir = get_knowledge_dir()
-        if not knowledge_dir:
-            return {}
-        state_file = knowledge_dir / "state.json"
-        if state_file.exists():
-            with open(state_file, 'r') as f:
-                return json.load(f)
-        return {}
-    except Exception:
-        return {}
-
-def extract_learning_keywords() -> dict:
-    """Extract keywords from learnings files to inform routing.
-
-    Uses mtime-based caching to avoid re-parsing files on every call.
-    """
-    global _KEYWORDS_CACHE
-
-    try:
-        knowledge_dir = get_knowledge_dir()
-        if not knowledge_dir:
-            return {"deep_keywords": set(), "fast_keywords": set()}
-
-        # Check file modification times for cache invalidation
-        quirks_file = knowledge_dir / "learnings" / "quirks.md"
-        patterns_file = knowledge_dir / "learnings" / "patterns.md"
-
-        quirks_mtime = quirks_file.stat().st_mtime if quirks_file.exists() else 0
-        patterns_mtime = patterns_file.stat().st_mtime if patterns_file.exists() else 0
-        current_mtime = max(quirks_mtime, patterns_mtime)
-
-        # Return cached result if files haven't changed
-        if _KEYWORDS_CACHE["keywords"] is not None and _KEYWORDS_CACHE["mtime"] >= current_mtime:
-            return _KEYWORDS_CACHE["keywords"]
-
-        deep_keywords = set()
-        fast_keywords = set()
-
-        # Parse quirks.md for complexity indicators
-        if quirks_file.exists():
-            with open(quirks_file, 'r') as f:
-                content = f.read().lower()
-            # Extract keywords from quirk entries that suggest complexity
-            for match in re.findall(r'## quirk:.*?(?=## |$)', content, re.DOTALL):
-                if any(word in match for word in ['complex', 'tricky', 'careful', 'unusual', 'non-standard']):
-                    # Extract the topic area (location field)
-                    loc_match = re.search(r'\*\*location:\*\*\s*([^\n]+)', match)
-                    if loc_match:
-                        # Extract meaningful words from location
-                        words = re.findall(r'\b[a-z]{3,}\b', loc_match.group(1).lower())
-                        deep_keywords.update(words)
-
-        # Parse patterns.md for simple patterns
-        if patterns_file.exists():
-            with open(patterns_file, 'r') as f:
-                content = f.read().lower()
-            for match in re.findall(r'## pattern:.*?(?=## |$)', content, re.DOTALL):
-                if any(word in match for word in ['simple', 'straightforward', 'always', 'standard']):
-                    # Extract topic keywords
-                    insight_match = re.search(r'\*\*insight:\*\*\s*([^\n]+)', match)
-                    if insight_match:
-                        words = re.findall(r'\b[a-z]{3,}\b', insight_match.group(1).lower())
-                        fast_keywords.update(words)
-
-        result = {"deep_keywords": deep_keywords, "fast_keywords": fast_keywords}
-
-        # Cache the result with current mtime
-        _KEYWORDS_CACHE["keywords"] = result
-        _KEYWORDS_CACHE["mtime"] = current_mtime
-
-        return result
-    except Exception:
-        return {"deep_keywords": set(), "fast_keywords": set()}
-
-def apply_learned_adjustments(prompt: str, result: dict) -> dict:
-    """Apply learned knowledge to adjust routing confidence (conservative)."""
-    try:
-        state = get_learning_state()
-
-        # Check if informed routing is enabled
-        if not state.get("informed_routing", False):
-            return result
-
-        boost = state.get("informed_routing_boost", 0.1)
-        keywords = extract_learning_keywords()
-
-        prompt_lower = prompt.lower()
-        deep_matches = sum(1 for kw in keywords["deep_keywords"] if kw in prompt_lower)
-        fast_matches = sum(1 for kw in keywords["fast_keywords"] if kw in prompt_lower)
-
-        # Only adjust if we have meaningful signal (2+ keyword matches)
-        # Conservative: require more evidence for expensive routes
-        if deep_matches >= 2 and result["route"] != "deep":
-            # Boost toward deep, but cap at 0.1 increase
-            result["confidence"] = min(1.0, result["confidence"] + boost)
-            if result["confidence"] >= 0.8:
-                result["route"] = "deep"
-                result["metadata"] = result.get("metadata", {})
-                result["metadata"]["learned_boost"] = "deep"
-
-        elif fast_matches >= 2 and result["route"] == "deep":
-            # If learned patterns suggest simple, consider downgrading
-            # But be conservative - don't downgrade high-confidence deep
-            if result["confidence"] < 0.8:
-                result["route"] = "standard"
-                result["metadata"] = result.get("metadata", {})
-                result["metadata"]["learned_boost"] = "downgrade"
-
-        return result
-    except Exception:
-        return result
 
 def is_exception_query(prompt: str) -> tuple[bool, str]:
     """Check if query matches exception patterns that bypass routing."""
@@ -624,7 +326,7 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
             "version": "1.2",
             "total_queries": 0,
             "routes": {"fast": 0, "standard": 0, "deep": 0, "orchestrated": 0},
-            "exceptions": {"router_meta": 0, "slash_commands": 0},
+            "exceptions": {"router_meta": 0, "slash_commands": 0, "explicit_route": 0, "explicit_retry": 0},
             "tool_intensive_queries": 0,
             "orchestrated_queries": 0,
             "estimated_savings": 0.0,
@@ -645,22 +347,37 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
         # Ensure v1.2 schema fields exist (migration from v1.0/v1.1)
         stats.setdefault("version", "1.2")
         stats.setdefault("routes", {}).setdefault("orchestrated", 0)
-        stats.setdefault("exceptions", {"router_meta": 0, "slash_commands": 0, "explicit_route": 0, "explicit_retry": 0})
+        # Properly migrate exceptions dict - merge sub-keys individually
+        exceptions = stats.setdefault("exceptions", {})
+        for key in ["router_meta", "slash_commands", "explicit_route", "explicit_retry"]:
+            exceptions.setdefault(key, 0)
         stats.setdefault("tool_intensive_queries", 0)
         stats.setdefault("orchestrated_queries", 0)
         stats.setdefault("delegation_savings", 0.0)
 
-        # Update stats
-        stats["total_queries"] += 1
         metadata = metadata or {}
-
-        # Track exceptions (queries that bypass routing due to CLAUDE.md rules)
         exception_type = metadata.get("exception_type")
+
+        # Exceptions (slash commands, explicit routes, etc.) are tracked separately
+        # and don't count toward route distribution or savings
         if exception_type:
             stats["exceptions"][exception_type] = stats["exceptions"].get(exception_type, 0) + 1
+            # Exceptions still count toward total_queries for overall usage tracking
+            stats["total_queries"] += 1
+            # But they don't get route counts or savings - exit early after updating timestamp
+            stats["last_updated"] = datetime.now().isoformat()
+            with open(STATS_FILE, "w") as f:
+                lock_file(f, exclusive=True)
+                json.dump(stats, f, indent=2)
+                unlock_file(f)
+            return
+
+        # Regular classification - update all stats
+        stats["total_queries"] += 1
 
         # Track orchestrated vs regular routes
-        if metadata.get("orchestration") and route == "deep":
+        # Orchestration counts as orchestrated regardless of underlying route
+        if metadata.get("orchestration"):
             stats["routes"]["orchestrated"] += 1
             stats["orchestrated_queries"] += 1
         else:
@@ -694,13 +411,18 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
             session = {
                 "date": today,
                 "queries": 0,
-                "routes": {"fast": 0, "standard": 0, "deep": 0},
+                "routes": {"fast": 0, "standard": 0, "deep": 0, "orchestrated": 0},
                 "savings": 0.0
             }
             stats.setdefault("sessions", []).append(session)
 
         session["queries"] += 1
-        session["routes"][route] += 1
+        # Session routes should match global route tracking
+        if metadata.get("orchestration"):
+            session["routes"].setdefault("orchestrated", 0)
+            session["routes"]["orchestrated"] += 1
+        else:
+            session["routes"][route] += 1
         session["savings"] += savings
 
         # Keep only last 30 days of sessions
@@ -887,7 +609,7 @@ Return JSON only:
 def classify_hybrid(prompt: str) -> dict:
     """
     Hybrid classification: cache first, then rules, then LLM fallback,
-    then learned adjustments, then context boost.
+    then context boost.
     """
     # Step 0: Check cache for similar query (instant)
     cached = check_classification_cache(prompt)
@@ -909,16 +631,11 @@ def classify_hybrid(prompt: str) -> dict:
         if api_key:
             llm_result = classify_by_llm(prompt, api_key)
             if llm_result:
-                # Apply learned adjustments (opt-in, conservative)
-                llm_result = apply_learned_adjustments(prompt, llm_result)
                 # Cache LLM result (more expensive to compute)
                 write_classification_cache(prompt, llm_result)
                 return llm_result
 
-    # Step 4: Apply learned adjustments (opt-in, conservative)
-    result = apply_learned_adjustments(prompt, result)
-
-    # Step 5: Cache the result for future queries
+    # Step 4: Cache the result for future queries
     write_classification_cache(prompt, result)
 
     return result
@@ -961,6 +678,9 @@ def main():
                 # Log explicit route command to stats
                 log_routing_decision(route, 1.0, "explicit", [f"/route {first_word}"], {"exception_type": "explicit_route"})
 
+                # Update session state for follow-up detection
+                update_session_state(route, {"explicit": True})
+
                 context = f"""[Claude Router] EXPLICIT MODEL OVERRIDE
 Route: {route} | Model: {model} | Source: User specified "{first_word}"
 
@@ -999,6 +719,9 @@ Task(subagent_type="claude-router:{subagent}", prompt="{query}", description="Ro
                 # Log explicit retry command to stats
                 log_routing_decision(route, 1.0, "explicit", [f"/retry {retry_args}"], {"exception_type": "explicit_retry"})
 
+                # Update session state for follow-up detection
+                update_session_state(route, {"explicit": True, "retry": True})
+
                 context = f"""[Claude Router] EXPLICIT RETRY OVERRIDE
 Route: {route} | Model: {model} | Source: User specified "/retry {retry_args}"
 
@@ -1020,9 +743,9 @@ Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>
                 sys.exit(0)
 
         # Log slash command to stats (skills handle the actual command)
-        # Extract command name for tracking
+        # Extract command name for tracking - use "none" as route since no routing happens
         cmd_name = stripped.split()[0] if stripped.split() else "/"
-        log_routing_decision("deep", 1.0, "slash_command", [cmd_name], {"exception_type": "slash_commands"})
+        log_routing_decision("none", 1.0, "slash_command", [cmd_name], {"exception_type": "slash_commands"})
         sys.exit(0)
 
     # Check for exception queries (router meta-questions)

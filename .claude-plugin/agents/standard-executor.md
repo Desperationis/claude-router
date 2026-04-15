@@ -1,7 +1,7 @@
 ---
 name: standard-executor
 description: Standard coding tasks using Sonnet
-model: sonnet
+model: claude-sonnet-4-5-20250929
 ---
 
 Start your response with: `[Sonnet]` on its own line.

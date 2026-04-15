@@ -20,7 +20,7 @@ The stats file contains (v1.2 schema):
   "version": "1.2",
   "total_queries": 100,
   "routes": {"fast": 30, "standard": 50, "deep": 10, "orchestrated": 10},
-  "exceptions": {"router_meta": 15, "slash_commands": 0},
+  "exceptions": {"router_meta": 2, "slash_commands": 3, "explicit_route": 1, "explicit_retry": 1},
   "tool_intensive_queries": 25,
   "orchestrated_queries": 10,
   "estimated_savings": 12.50,
@@ -61,10 +61,13 @@ Route Distribution:
 Tool-Intensive Queries: 25 (25%)
 Orchestrated Queries:   10 (10%)
 
-⚡ Exceptions (handled by Opus despite classification)
+⚡ Exceptions (tracked separately, not in route counts)
 ───────────────────────────────────────────────────
-Router Meta-Queries:  15  (queries about the router itself)
-Total Exceptions:     15
+Slash Commands:   3  (e.g., /router-stats)
+Explicit Routes:  1  (e.g., /route opus ...)
+Explicit Retries: 1  (e.g., /retry sonnet)
+Router Meta:      2  (queries about the router)
+Total Exceptions: 7
 
 💰 Cost Savings
 ───────────────────────────────────────────────────
@@ -95,4 +98,5 @@ Route Distribution:
 - Savings are calculated assuming Opus would have been used for all queries
 - Cost estimates use: Haiku 4.5 $1/$5, Sonnet 4.5 $3/$15, Opus 4.5 $5/$25 per 1M tokens
 - Average query estimated at 1K input + 2K output tokens
-- **Exceptions**: Queries about the router itself are classified but handled by Opus (per CLAUDE.md rules). This is intentional - users discussing the router get the most capable model while still seeing what the classifier decided.
+- **Exceptions are tracked separately**: Slash commands, explicit model selections (/route, /retry), and router meta-queries are counted in `exceptions`, not in `routes`. This prevents double-counting.
+- **No double counting**: `total_queries` = sum of routes + sum of exceptions. Route percentages and exception percentages should add up correctly.

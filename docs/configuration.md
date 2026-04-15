@@ -16,7 +16,7 @@ Or add it to your project's `.env` file.
 
 ## Commands Reference
 
-Claude Router provides slash commands for routing, knowledge management, and more.
+Claude Router provides slash commands for routing and more.
 
 ### Routing Commands
 
@@ -32,6 +32,10 @@ Override automatic routing and force a specific model:
 
 Models: `haiku`/`fast`, `sonnet`/`standard`, `opus`/`deep`
 
+---
+
+### Stats Commands
+
 #### `/router-stats`
 
 View your routing statistics and cost savings:
@@ -40,31 +44,17 @@ View your routing statistics and cost savings:
 /router-stats
 ```
 
----
+Shows global statistics across all projects, including route distribution, optimization rate, estimated cost savings, and today's session summary.
 
-### Knowledge Commands (v1.4)
+#### `/router-stats-reset`
 
-#### `/learn`
+Reset your routing statistics by deleting `~/.claude/router-stats.json`:
 
-Extract insights from current conversation NOW.
+```
+/router-stats-reset
+```
 
-#### `/learn-on`
-
-Enable continuous learning (auto-extracts every 10 queries).
-
-#### `/learn-off`
-
-Disable continuous learning.
-
-#### `/knowledge`
-
-View knowledge base status and recent learnings.
-
-#### `/learn-reset`
-
-Clear all knowledge and start fresh.
-
-See [Knowledge System](knowledge-system.md) for full documentation.
+**Warning:** This is destructive - all historical counts, cost savings, and session history are permanently lost. The stats file is recreated automatically on the next routed query. Useful for starting fresh after benchmarking, at the start of a new month, or after changing routing rules.
 
 ---
 
@@ -125,29 +115,6 @@ Retry last query with an escalated model:
 
 ---
 
-### Plugin Integration Commands (v2.0)
-
-#### `/router-plugins`
-
-Manage optional plugin integrations:
-
-```
-/router-plugins                     # List all plugins and status
-/router-plugins enable <name>       # Enable integration
-/router-plugins disable <name>      # Disable integration
-/router-plugins detect              # Re-detect installed plugins
-```
-
-**Supported plugins:**
-- `hookify` - Pattern-based behavior rules
-- `ralph-loop` - Iterative development loops
-- `code-review` - Multi-agent PR review
-- `feature-dev` - 7-phase feature development
-
-All plugins are **optional** - Claude Router works fully without them.
-
----
-
 ## Automatic vs Manual Routing
 
 - **Automatic**: The UserPromptSubmit hook classifies every query and injects routing context
@@ -176,7 +143,7 @@ Subagent mapping:
 - standard → `claude-router:standard-executor`
 - deep → `claude-router:deep-executor`
 
-Exceptions: Slash commands (`/route`, `/router-stats`) and questions about the router itself.
+Exceptions: Slash commands (`/route`, `/router-stats`, `/router-stats-reset`) and questions about the router itself.
 ```
 
 </details>

@@ -13,43 +13,23 @@ claude-router/
 │   ├── commands/                  # Slash command definitions
 │   │   ├── route.md
 │   │   ├── router-stats.md
-│   │   ├── learn.md               # (v1.4)
-│   │   ├── learn-on.md            # (v1.4)
-│   │   ├── learn-off.md           # (v1.4)
-│   │   ├── knowledge.md           # (v1.4)
-│   │   ├── learn-reset.md         # (v1.4)
 │   │   ├── orchestrate.md         # (v2.0)
 │   │   ├── router-analytics.md    # (v2.0)
-│   │   ├── retry.md               # (v2.0)
-│   │   └── router-plugins.md      # (v2.0)
+│   │   └── retry.md               # (v2.0)
 │   ├── hooks/
 │   │   └── classify-prompt.py     # Hybrid classifier with multi-turn awareness
 │   ├── skills/
 │   │   ├── route/                 # Manual routing skill
 │   │   ├── router-stats/          # Statistics skill
-│   │   ├── learn/                 # Insight extraction (v1.4)
-│   │   ├── learn-on/              # Enable continuous learning (v1.4)
-│   │   ├── learn-off/             # Disable continuous learning (v1.4)
-│   │   ├── knowledge/             # Knowledge base status (v1.4)
-│   │   ├── learn-reset/           # Reset knowledge base (v1.4)
 │   │   ├── orchestrate/           # Forked orchestration (v2.0)
 │   │   ├── router-analytics/      # HTML dashboard (v2.0)
-│   │   ├── retry/                 # Error recovery (v2.0)
-│   │   └── router-plugins/        # Plugin management (v2.0)
+│   │   └── retry/                 # Error recovery (v2.0)
 │   └── plugin.json                # Plugin manifest
 ├── agents/                        # Source agent definitions
 ├── commands/                      # Source command definitions
 ├── hooks/                         # Source hook scripts
 ├── skills/                        # Source skills
-├── docs/                          # Documentation
-└── knowledge/                     # Project knowledge base (v1.4)
-    ├── cache/                     # Classification cache
-    ├── learnings/                 # Persistent insights
-    │   ├── patterns.md            # What works well
-    │   ├── quirks.md              # Project oddities
-    │   └── decisions.md           # Architectural decisions
-    ├── context/                   # Session state
-    └── state.json                 # Learning mode & plugin state
+└── docs/                          # Documentation
 ```
 
 ---
@@ -68,7 +48,6 @@ The heart of Claude Router. This hook:
 - In-memory LRU cache for repeated queries
 - Session state tracking for multi-turn awareness
 - Follow-up query detection
-- Plugin detection system
 
 ### Agents
 
@@ -87,12 +66,9 @@ Skills implement the actual functionality behind slash commands:
 |-------|---------|-------------|
 | `route` | `/route` | Manual model override |
 | `router-stats` | `/router-stats` | Usage statistics |
-| `learn` | `/learn` | Extract insights |
-| `knowledge` | `/knowledge` | View knowledge base |
 | `orchestrate` | `/orchestrate` | Forked task execution |
 | `router-analytics` | `/router-analytics` | HTML dashboard |
 | `retry` | `/retry` | Error recovery |
-| `router-plugins` | `/router-plugins` | Plugin management |
 
 ---
 
@@ -107,11 +83,10 @@ User Query
 │  (classify-prompt.py)           │
 ├─────────────────────────────────┤
 │  1. Check in-memory cache       │
-│  2. Check file cache            │
-│  3. Rule-based classification   │
-│  4. LLM fallback (if needed)    │
-│  5. Session state update        │
-│  6. Inject routing directive    │
+│  2. Rule-based classification   │
+│  3. LLM fallback (if needed)    │
+│  4. Session state update        │
+│  5. Inject routing directive    │
 └─────────────────────────────────┘
     │
     ▼
@@ -143,9 +118,3 @@ Global routing statistics across all projects.
 
 ### `~/.claude/router-session.json`
 Session state for multi-turn context awareness.
-
-### `knowledge/state.json`
-Per-project learning mode and plugin configuration.
-
-### `knowledge/cache/classifications.md`
-Per-project classification cache.

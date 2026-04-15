@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "claude-router",
-      "description": "Intelligent model routing for Claude Code - routes queries to optimal Claude model (Haiku/Sonnet/Opus) based on complexity, with persistent knowledge system, context forking, and multi-turn awareness",
+      "description": "Intelligent model routing for Claude Code - routes queries to optimal Claude model (Haiku/Sonnet/Opus) based on complexity, with context forking and multi-turn awareness",
       "category": "productivity",
       "source": "./",
       "homepage": "https://github.com/Desperationis/claude-router"

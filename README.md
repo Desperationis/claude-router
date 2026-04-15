@@ -15,7 +15,6 @@
 - Zero-latency rule-based classification with LLM fallback
 - Token-optimized agent definitions (3.4k vs 11.9k tokens)
 - Multi-turn context awareness and follow-up detection
-- Persistent knowledge system across sessions
 
 ## Key Metrics
 
@@ -80,12 +79,10 @@ That's it! The plugin automatically routes queries - no configuration needed.
 |---------|-------------|
 | `/route <model>` | Override routing for a query |
 | `/router-stats` | View usage statistics |
-| `/learn` | Extract insights from conversation |
-| `/knowledge` | View knowledge base status |
+| `/router-stats-reset` | Reset usage statistics |
 | `/orchestrate` | Execute complex tasks with forking |
 | `/router-analytics` | Generate HTML dashboard |
 | `/retry` | Retry with escalated model |
-| `/router-plugins` | Manage plugin integrations |
 
 See [Configuration & Commands](docs/configuration.md) for full documentation.
 
@@ -96,7 +93,6 @@ See [Configuration & Commands](docs/configuration.md) for full documentation.
 | [How It Works](docs/how-it-works.md) | Default vs Router behavior, cost savings |
 | [Routing Rules](docs/routing.md) | Classification rules, example output |
 | [Configuration](docs/configuration.md) | All commands and settings |
-| [Knowledge System](docs/knowledge-system.md) | Persistent learning across sessions |
 | [Architecture](docs/architecture.md) | Project structure, data flow |
 | [Roadmap](docs/roadmap.md) | Completed phases, coming soon |
 | [Contributing](docs/CONTRIBUTING.md) | How to contribute |
