@@ -74,6 +74,9 @@ EXCEPTION_PATTERNS = [
 # Session state file for multi-turn context awareness
 SESSION_STATE_FILE = Path.home() / ".claude" / "router-session.json"
 
+# Number of recent messages to include for LLM context
+CONTEXT_MESSAGE_LIMIT = 6
+
 # Follow-up query patterns (pre-compiled)
 FOLLOW_UP_PATTERNS = [
     re.compile(r"^(and |also |now |next |then |but )"),
@@ -122,6 +125,86 @@ def is_follow_up_query(prompt: str) -> bool:
         if pattern.match(prompt_lower):
             return True
     return False
+
+
+def read_transcript_context(transcript_path: str, current_prompt: str, limit: int = CONTEXT_MESSAGE_LIMIT) -> list:
+    """Read recent messages from the transcript JSONL file.
+
+    Returns a list of {"role": "user"|"assistant", "content": str} dicts.
+    Excludes the current prompt if it appears at the end (not yet appended).
+    """
+    if not transcript_path:
+        return []
+
+    try:
+        path = Path(transcript_path)
+        if not path.exists():
+            return []
+
+        messages = []
+        with open(path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    # Claude Code transcript format: entry has 'message' field with role/content
+                    msg = entry.get("message", entry)
+                    role = msg.get("role")
+                    content = msg.get("content", "")
+
+                    # Handle content that may be a list (tool use, etc.)
+                    if isinstance(content, list):
+                        # Extract text content only
+                        text_parts = []
+                        for part in content:
+                            if isinstance(part, dict) and part.get("type") == "text":
+                                text_parts.append(part.get("text", ""))
+                            elif isinstance(part, str):
+                                text_parts.append(part)
+                        content = " ".join(text_parts)
+
+                    if role in ("user", "assistant") and content:
+                        # Truncate long messages for context
+                        if len(content) > 500:
+                            content = content[:500] + "..."
+                        messages.append({"role": role, "content": content})
+                except json.JSONDecodeError:
+                    continue
+
+        # Take only the last N messages
+        messages = messages[-limit:]
+
+        # Dedupe: if last message is the current prompt, remove it
+        if messages and messages[-1]["role"] == "user":
+            last_content = messages[-1]["content"].rstrip("...")
+            if current_prompt.startswith(last_content) or last_content.startswith(current_prompt[:100]):
+                messages = messages[:-1]
+
+        return messages
+
+    except Exception as e:
+        print(f"[claude-router] Failed to read transcript: {e}", file=sys.stderr)
+        return []
+
+
+def format_context_for_llm(messages: list, current_prompt: str) -> str:
+    """Format conversation context for LLM classification prompt."""
+    if not messages:
+        return f'Query: "{current_prompt}"'
+
+    context_lines = ["Recent conversation:"]
+    for msg in messages:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        content = msg["content"]
+        # Further truncate for the classification prompt
+        if len(content) > 200:
+            content = content[:200] + "..."
+        context_lines.append(f"{role}: {content}")
+
+    context_lines.append(f"\nCurrent query to classify: \"{current_prompt}\"")
+    return "\n".join(context_lines)
 
 
 def apply_context_boost(result: dict, session_state: dict, is_follow_up: bool) -> dict:
@@ -505,10 +588,15 @@ def classify_by_rules(prompt: str) -> dict:
     return {"route": "fast", "confidence": 0.5, "signals": ["no strong patterns"], "method": "rules"}
 
 
-def classify_by_llm(prompt: str, api_key: str) -> dict:
+def classify_by_llm(prompt: str, api_key: str, context_messages: list = None) -> dict:
     """
     Classify prompt using Haiku LLM.
     Used as fallback for low-confidence rule-based results.
+
+    Args:
+        prompt: The current user prompt to classify
+        api_key: Anthropic API key
+        context_messages: Optional list of recent conversation messages for context
     """
     try:
         from anthropic import Anthropic
@@ -517,9 +605,14 @@ def classify_by_llm(prompt: str, api_key: str) -> dict:
 
     client = Anthropic(api_key=api_key)
 
+    # Format query with conversation context if available
+    query_section = format_context_for_llm(context_messages or [], prompt)
+
     classification_prompt = f"""Classify this coding query into exactly one route. Return ONLY valid JSON, no other text.
 
-Query: "{prompt}"
+{query_section}
+
+IMPORTANT: Consider the CONVERSATION CONTEXT when classifying. A simple follow-up like "yes do it" or "go ahead" to a complex architecture discussion should be classified as "deep", not "fast".
 
 Routes:
 - "fast": Simple factual questions, syntax lookups, formatting, git status, JSON/YAML manipulation
@@ -561,11 +654,15 @@ Return JSON only:
         return None
 
 
-def classify_by_cli(prompt: str) -> dict:
+def classify_by_cli(prompt: str, context_messages: list = None) -> dict:
     """
     Classify prompt using the claude CLI with Haiku.
     Used as fallback when no API key is set but claude CLI is available.
     Uses the user's existing Claude subscription (OAuth/keychain auth).
+
+    Args:
+        prompt: The current user prompt to classify
+        context_messages: Optional list of recent conversation messages for context
 
     Returns None on any failure (timeout, CLI not found, parse error).
     """
@@ -573,10 +670,23 @@ def classify_by_cli(prompt: str) -> dict:
     if not shutil.which("claude"):
         return None
 
+    # Build context section if available
+    context_section = ""
+    if context_messages:
+        context_lines = []
+        for msg in context_messages[-3:]:  # Last 3 messages for CLI (keep it short)
+            role = "U" if msg["role"] == "user" else "A"
+            content = msg["content"][:100]  # Very short for CLI
+            context_lines.append(f"{role}: {content}")
+        if context_lines:
+            context_section = "Recent context:\n" + "\n".join(context_lines) + "\n\n"
+
     # Keep prompt short to minimize latency - Haiku is smart enough
-    classification_prompt = f'''Classify this query. Reply with ONLY one word: fast, standard, or deep.
+    classification_prompt = f'''{context_section}Classify this query. Reply with ONLY one word: fast, standard, or deep.
 
 Query: "{prompt[:200]}"
+
+IMPORTANT: Consider conversation context! A follow-up like "yes" or "do it" to a complex task = same complexity.
 
 fast = simple questions, syntax, formatting, git commands
 standard = bug fixes, features, refactoring, tests, code changes
@@ -645,7 +755,7 @@ One word answer:'''
         return None
 
 
-def classify_hybrid(prompt: str) -> dict:
+def classify_hybrid(prompt: str, transcript_path: str = None) -> dict:
     """
     Hybrid classification: rules first, then context boost, then LLM fallback.
 
@@ -653,6 +763,10 @@ def classify_hybrid(prompt: str) -> dict:
     1. SDK (if ANTHROPIC_API_KEY set) - fastest, ~500ms
     2. CLI (if claude command available) - uses subscription, ~1-2s
     3. Return rule-based result
+
+    Args:
+        prompt: The current user prompt to classify
+        transcript_path: Optional path to conversation transcript for context
     """
     # Step 1: Rule-based classification (instant, free)
     result = classify_by_rules(prompt)
@@ -663,17 +777,20 @@ def classify_hybrid(prompt: str) -> dict:
     if follow_up:
         result = apply_context_boost(result, session_state, follow_up)
 
-    # Step 3: If low confidence, try LLM classification
+    # Step 3: If low confidence, try LLM classification with conversation context
     if result["confidence"] < CONFIDENCE_THRESHOLD:
+        # Read conversation context from transcript
+        context_messages = read_transcript_context(transcript_path, prompt)
+
         # Priority 1: SDK (fastest, requires API key)
         api_key = get_api_key()
         if api_key:
-            llm_result = classify_by_llm(prompt, api_key)
+            llm_result = classify_by_llm(prompt, api_key, context_messages)
             if llm_result:
                 return llm_result
 
         # Priority 2: CLI (uses existing subscription, no API key needed)
-        cli_result = classify_by_cli(prompt)
+        cli_result = classify_by_cli(prompt, context_messages)
         if cli_result:
             return cli_result
 
@@ -792,8 +909,11 @@ Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>
     # Check for exception queries (router meta-questions)
     is_exception, exception_type = is_exception_query(prompt)
 
-    # Classify using hybrid approach
-    result = classify_hybrid(prompt)
+    # Get transcript path for conversation context
+    transcript_path = input_data.get("transcript_path")
+
+    # Classify using hybrid approach with conversation context
+    result = classify_hybrid(prompt, transcript_path)
 
     route = result["route"]
     confidence = result["confidence"]

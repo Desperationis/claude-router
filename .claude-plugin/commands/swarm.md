@@ -15,9 +15,9 @@ Launch a parallel swarm of agents to tackle complex tasks with full isolation.
 
 ## What It Does
 
-1. **Opus Coordinator** analyzes your task and decomposes it into 5-30 subtasks
-2. **Parallel Agents** spawn in isolated git worktrees (no conflicts)
-3. **Mixed Models** — Haiku for reads, Sonnet for implementations, Opus for critical decisions
+1. **Opus Coordinator** analyzes your task and decomposes it into 5-30 subtasks, tagging each with a model
+2. **Mixed-Model Swarm** — every subtask is explicitly tagged Haiku/Sonnet/Opus based on whether it reads, applies a trivial mechanical edit, does real implementation work, or reasons across files. Target distribution for a healthy swarm is roughly 35% Haiku (reads + trivial edits), 55% Sonnet (real implementations), 10% Opus (cross-file decisions) — not a Sonnet monoculture
+3. **Parallel Agents** spawn in isolated git worktrees (no conflicts)
 4. **Live Streaming** — results appear as agents complete
 5. **Auto-Merge** — all changes merge back to your starting branch
 6. **Final Synthesis** — Opus summarizes what was accomplished
@@ -46,4 +46,4 @@ Launch a parallel swarm of agents to tackle complex tasks with full isolation.
 
 ## Cost Note
 
-Swarms are cost-effective because most subtasks use Haiku/Sonnet. Opus only handles coordination and critical decisions.
+Swarms are cost-effective only when the coordinator actually uses the cheap models. The coordinator is instructed to tag every read-only subtask (grep, ls, scan, extract) as Haiku, to actively decompose larger edits so that any mechanical piece with an exact before/after can also run on Haiku, and to reserve Opus for genuine cross-file reasoning. The target mix is roughly 35% Haiku / 55% Sonnet / 10% Opus. If you notice the coordinator over-spending on Sonnet for work that could be split into trivial edits, the model selection rules in `agents/swarm-coordinator.md` are where to tune it.
