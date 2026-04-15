@@ -733,6 +733,7 @@ Example:
 Task(subagent_type="claude-router:{subagent}", prompt="{query}", description="Route to {model}")"""
 
                 output = {
+                    "systemMessage": f"→ Routing to {model} (explicit)",
                     "hookSpecificOutput": {
                         "hookEventName": "UserPromptSubmit",
                         "additionalContext": context
@@ -773,6 +774,7 @@ Example:
 Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>", description="Retry with {model}")"""
 
                 output = {
+                    "systemMessage": f"→ Retrying with {model} (explicit)",
                     "hookSpecificOutput": {
                         "hookEventName": "UserPromptSubmit",
                         "additionalContext": context
@@ -847,8 +849,10 @@ Do NOT respond to the user directly. Do NOT skip this step. Delegate immediately
 Example:
 Task(subagent_type="claude-router:{subagent}", prompt="<user's query>", description="Route to {model}")"""
 
-    # Output as JSON with hookSpecificOutput for proper injection
+    # Output as JSON with hookSpecificOutput for context injection
+    # and systemMessage for user-visible feedback
     output = {
+        "systemMessage": f"→ Routing to {model} ({confidence:.0%} confidence)",
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
             "additionalContext": context

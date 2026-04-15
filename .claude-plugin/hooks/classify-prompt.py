@@ -720,9 +720,6 @@ def main():
                 # Update session state for follow-up detection
                 update_session_state(route, {"explicit": True})
 
-                # Output routing info to stderr for user visibility
-                print(f"→ Routing to {model} (explicit)", file=sys.stderr)
-
                 context = f"""[Claude Router] EXPLICIT MODEL OVERRIDE
 Route: {route} | Model: {model} | Source: User specified "{first_word}"
 
@@ -736,6 +733,7 @@ Example:
 Task(subagent_type="claude-router:{subagent}", prompt="{query}", description="Route to {model}")"""
 
                 output = {
+                    "systemMessage": f"→ Routing to {model} (explicit)",
                     "hookSpecificOutput": {
                         "hookEventName": "UserPromptSubmit",
                         "additionalContext": context
@@ -764,9 +762,6 @@ Task(subagent_type="claude-router:{subagent}", prompt="{query}", description="Ro
                 # Update session state for follow-up detection
                 update_session_state(route, {"explicit": True, "retry": True})
 
-                # Output routing info to stderr for user visibility
-                print(f"→ Retrying with {model} (explicit)", file=sys.stderr)
-
                 context = f"""[Claude Router] EXPLICIT RETRY OVERRIDE
 Route: {route} | Model: {model} | Source: User specified "/retry {retry_args}"
 
@@ -779,6 +774,7 @@ Example:
 Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>", description="Retry with {model}")"""
 
                 output = {
+                    "systemMessage": f"→ Retrying with {model} (explicit)",
                     "hookSpecificOutput": {
                         "hookEventName": "UserPromptSubmit",
                         "additionalContext": context
@@ -853,11 +849,10 @@ Do NOT respond to the user directly. Do NOT skip this step. Delegate immediately
 Example:
 Task(subagent_type="claude-router:{subagent}", prompt="<user's query>", description="Route to {model}")"""
 
-    # Output routing info to stderr for user visibility
-    print(f"→ Routing to {model} ({confidence:.0%} confidence)", file=sys.stderr)
-
-    # Output as JSON with hookSpecificOutput for proper injection
+    # Output as JSON with hookSpecificOutput for context injection
+    # and systemMessage for user-visible feedback
     output = {
+        "systemMessage": f"→ Routing to {model} ({confidence:.0%} confidence)",
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
             "additionalContext": context
