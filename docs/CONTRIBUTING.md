@@ -25,19 +25,19 @@ claude-router/
 │   ├── fast-executor.md      # Haiku agent
 │   ├── standard-executor.md  # Sonnet agent
 │   ├── deep-executor.md      # Opus agent
-│   └── opus-orchestrator.md  # Opus orchestrator
+│   └── swarm-coordinator.md  # Swarm coordinator
 ├── commands/                 # Slash command definitions
 │   ├── route.md
 │   ├── router-stats.md
 │   ├── router-stats-reset.md
-│   ├── orchestrate.md
+│   ├── swarm.md
 │   ├── router-analytics.md
 │   └── retry.md
 ├── skills/
 │   ├── route/                # Manual routing
 │   ├── router-stats/         # Usage statistics
 │   ├── router-stats-reset/   # Reset statistics
-│   ├── orchestrate/          # Forked orchestration
+│   ├── swarm/                # Parallel agents
 │   ├── router-analytics/     # HTML dashboard
 │   └── retry/                # Error recovery
 └── .claude-plugin/           # Marketplace plugin files

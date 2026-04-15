@@ -74,7 +74,7 @@ That's it! The plugin automatically routes queries - no configuration needed.
 | `/route <model>` | Override routing for a query |
 | `/router-stats` | View usage statistics |
 | `/router-stats-reset` | Reset usage statistics |
-| `/orchestrate` | Execute complex tasks with forking |
+| `/swarm` | Launch 5-30 parallel agents with worktree isolation |
 | `/router-analytics` | Generate HTML dashboard |
 | `/retry` | Retry with escalated model |
 
@@ -102,12 +102,13 @@ Claude Router intercepts queries and routes them to the optimal model:
 "Design architecture"  → Opus    (~$0.06)  ✓ Powerful
 ```
 
-For complex tasks, the Opus Orchestrator delegates subtasks to cheaper models:
-- Opus handles strategy → expensive reasoning
+For complex tasks, `/swarm` launches parallel agents in isolated worktrees:
+- Opus coordinates decomposition and synthesis
 - Haiku handles file reads → cheap I/O
-- Sonnet handles edits → balanced implementation
+- Sonnet handles implementations → balanced
+- All changes auto-merge back to your branch
 
-**Result:** Same quality, ~40% less cost on complex workflows.
+**Result:** Same quality, massive parallelism, ~40% cost savings.
 
 See [How It Works](docs/how-it-works.md) for detailed comparison.
 

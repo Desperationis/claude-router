@@ -9,12 +9,12 @@ claude-router/
 │   │   ├── fast-executor.md       # Haiku agent
 │   │   ├── standard-executor.md   # Sonnet agent
 │   │   ├── deep-executor.md       # Opus agent
-│   │   └── opus-orchestrator.md   # Opus orchestrator (v1.2)
+│   │   └── swarm-coordinator.md   # Swarm coordinator (v2.2)
 │   ├── commands/                  # Slash command definitions
 │   │   ├── route.md
 │   │   ├── router-stats.md
 │   │   ├── router-stats-reset.md  # (v2.1)
-│   │   ├── orchestrate.md         # (v2.0)
+│   │   ├── swarm.md               # (v2.2)
 │   │   ├── router-analytics.md    # (v2.0)
 │   │   └── retry.md               # (v2.0)
 │   ├── hooks/
@@ -23,7 +23,7 @@ claude-router/
 │   │   ├── route/                 # Manual routing skill
 │   │   ├── router-stats/          # Statistics skill
 │   │   ├── router-stats-reset/    # Reset statistics (v2.1)
-│   │   ├── orchestrate/           # Forked orchestration (v2.0)
+│   │   ├── swarm/                 # Parallel agents (v2.2)
 │   │   ├── router-analytics/      # HTML dashboard (v2.0)
 │   │   └── retry/                 # Error recovery (v2.0)
 │   └── plugin.json                # Plugin manifest
@@ -57,7 +57,7 @@ The heart of Claude Router. This hook:
 | `fast-executor` | Haiku | Simple queries, lookups, formatting |
 | `standard-executor` | Sonnet | Typical coding tasks, tool-intensive work |
 | `deep-executor` | Opus | Complex architecture, security, trade-offs |
-| `opus-orchestrator` | Opus | Complex multi-step tasks with delegation |
+| `swarm-coordinator` | Opus | Parallel agent decomposition and coordination |
 
 ### Skills
 
@@ -68,7 +68,7 @@ Skills implement the actual functionality behind slash commands:
 | `route` | `/route` | Manual model override |
 | `router-stats` | `/router-stats` | Usage statistics |
 | `router-stats-reset` | `/router-stats-reset` | Reset statistics |
-| `orchestrate` | `/orchestrate` | Forked task execution |
+| `swarm` | `/swarm` | Parallel agent execution |
 | `router-analytics` | `/router-analytics` | HTML dashboard |
 | `retry` | `/retry` | Error recovery |
 

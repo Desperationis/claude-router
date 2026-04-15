@@ -19,17 +19,17 @@ The stats file contains (v1.2 schema):
 {
   "version": "1.2",
   "total_queries": 100,
-  "routes": {"fast": 30, "standard": 50, "deep": 10, "orchestrated": 10},
+  "routes": {"fast": 30, "standard": 50, "deep": 10, "complex": 10},
   "exceptions": {"router_meta": 2, "slash_commands": 3, "explicit_route": 1, "explicit_retry": 1},
   "tool_intensive_queries": 25,
-  "orchestrated_queries": 10,
+  "complex_queries": 10,
   "estimated_savings": 12.50,
   "delegation_savings": 2.50,
   "sessions": [
     {
       "date": "2026-01-03",
       "queries": 25,
-      "routes": {"fast": 8, "standard": 12, "deep": 2, "orchestrated": 3},
+      "routes": {"fast": 8, "standard": 12, "deep": 2, "complex": 3},
       "savings": 3.20
     }
   ],
@@ -54,12 +54,12 @@ Route Distribution:
   Fast (Haiku):       30 (30%)  ████████░░░░░░░░░░░░
   Standard (Sonnet):  50 (50%)  ██████████████░░░░░░
   Deep (Opus):        10 (10%)  ████░░░░░░░░░░░░░░░░
-  Orchestrated:       10 (10%)  ████░░░░░░░░░░░░░░░░
+  Complex (/swarm):   10 (10%)  ████░░░░░░░░░░░░░░░░
 
-🔧 Tool-Aware Routing
+🔧 Task Patterns
 ───────────────────────────────────────────────────
 Tool-Intensive Queries: 25 (25%)
-Orchestrated Queries:   10 (10%)
+Complex Tasks:          10 (10%)  (consider /swarm for these)
 
 ⚡ Exceptions (tracked separately, not in route counts)
 ───────────────────────────────────────────────────
@@ -81,7 +81,7 @@ Queries: 25
 Savings: $3.20
 
 Route Distribution:
-  Fast: 8 | Standard: 12 | Deep: 2 | Orchestrated: 3
+  Fast: 8 | Standard: 12 | Deep: 2 | Complex: 3
 ```
 
 ## Steps

@@ -280,10 +280,10 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
         stats = {
             "version": "1.2",
             "total_queries": 0,
-            "routes": {"fast": 0, "standard": 0, "deep": 0, "orchestrated": 0},
+            "routes": {"fast": 0, "standard": 0, "deep": 0, "complex": 0},
             "exceptions": {"router_meta": 0, "slash_commands": 0, "explicit_route": 0, "explicit_retry": 0},
             "tool_intensive_queries": 0,
-            "orchestrated_queries": 0,
+            "complex_queries": 0,
             "estimated_savings": 0.0,
             "delegation_savings": 0.0,
             "sessions": [],
@@ -301,13 +301,13 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
 
         # Ensure v1.2 schema fields exist (migration from v1.0/v1.1)
         stats.setdefault("version", "1.2")
-        stats.setdefault("routes", {}).setdefault("orchestrated", 0)
+        stats.setdefault("routes", {}).setdefault("complex", 0)
         # Properly migrate exceptions dict - merge sub-keys individually
         exceptions = stats.setdefault("exceptions", {})
         for key in ["router_meta", "slash_commands", "explicit_route", "explicit_retry"]:
             exceptions.setdefault(key, 0)
         stats.setdefault("tool_intensive_queries", 0)
-        stats.setdefault("orchestrated_queries", 0)
+        stats.setdefault("complex_queries", 0)
         stats.setdefault("delegation_savings", 0.0)
 
         metadata = metadata or {}
@@ -330,11 +330,11 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
         # Regular classification - update all stats
         stats["total_queries"] += 1
 
-        # Track orchestrated vs regular routes
-        # Orchestration counts as orchestrated regardless of underlying route
+        # Track complex vs regular routes
+        # Orchestration counts as complex regardless of underlying route
         if metadata.get("orchestration"):
-            stats["routes"]["orchestrated"] += 1
-            stats["orchestrated_queries"] += 1
+            stats["routes"]["complex"] += 1
+            stats["complex_queries"] += 1
         else:
             stats["routes"][route] += 1
 
@@ -348,7 +348,7 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
         savings = opus_cost - actual_cost
         stats["estimated_savings"] += savings
 
-        # Calculate delegation savings for orchestrated queries
+        # Calculate delegation savings for complex queries
         # Assumes 60% delegation (70% Haiku, 30% Sonnet) saves ~40% vs pure Opus
         if metadata.get("orchestration"):
             delegation_saving = opus_cost * 0.4  # ~40% savings through delegation
@@ -366,7 +366,7 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
             session = {
                 "date": today,
                 "queries": 0,
-                "routes": {"fast": 0, "standard": 0, "deep": 0, "orchestrated": 0},
+                "routes": {"fast": 0, "standard": 0, "deep": 0, "complex": 0},
                 "savings": 0.0
             }
             stats.setdefault("sessions", []).append(session)
@@ -374,8 +374,8 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
         session["queries"] += 1
         # Session routes should match global route tracking
         if metadata.get("orchestration"):
-            session["routes"].setdefault("orchestrated", 0)
-            session["routes"]["orchestrated"] += 1
+            session["routes"].setdefault("complex", 0)
+            session["routes"]["complex"] += 1
         else:
             session["routes"][route] += 1
         session["savings"] += savings
@@ -814,15 +814,11 @@ Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>
     update_session_state(route, metadata)
 
     # Map route to subagent and model
-    # Use opus-orchestrator for complex tasks with orchestration flag
-    if route == "deep" and metadata.get("orchestration"):
-        subagent = "opus-orchestrator"
-        model = "Opus (Orchestrator)"
-    else:
-        subagent_map = {"fast": "fast-executor", "standard": "standard-executor", "deep": "deep-executor"}
-        model_map = {"fast": "Haiku", "standard": "Sonnet", "deep": "Opus"}
-        subagent = subagent_map[route]
-        model = model_map[route]
+    # Note: /swarm is explicit - complex tasks route to deep-executor, user invokes /swarm for parallel agents
+    subagent_map = {"fast": "fast-executor", "standard": "standard-executor", "deep": "deep-executor"}
+    model_map = {"fast": "Haiku", "standard": "Sonnet", "deep": "Opus"}
+    subagent = subagent_map[route]
+    model = model_map[route]
 
     signals_str = ", ".join(signals)
 

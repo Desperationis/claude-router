@@ -58,21 +58,25 @@ Reset your routing statistics by deleting `~/.claude/router-stats.json`:
 
 ---
 
-### Context Forking Commands (v2.0)
+### Parallel Agent Commands (v2.2)
 
-#### `/orchestrate <task>`
+#### `/swarm <task>`
 
-Execute complex multi-step tasks with forked context:
+Launch 5-30 parallel agents with worktree isolation:
 
 ```
-/orchestrate Refactor the authentication system to use JWT tokens
-/orchestrate Add comprehensive error handling across all API endpoints
+/swarm Refactor all API handlers to use the new error pattern
+/swarm Add unit tests for every function in src/utils/
+/swarm Audit the entire codebase for SQL injection vulnerabilities
 ```
 
-**Benefits:**
-- Clean history (subtasks stay in fork)
-- Cost optimized (40-50% cheaper)
-- Better focus
+**Features:**
+- Opus decomposes your task into parallel subtasks
+- Agents run in isolated git worktrees (no conflicts)
+- Mixed models: Haiku (reads), Sonnet (implementations), Opus (critical)
+- Results stream as agents complete
+- Failed agents retry automatically
+- All changes auto-merge back to your branch
 
 #### `/router-analytics`
 

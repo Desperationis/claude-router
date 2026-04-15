@@ -23,14 +23,12 @@
 
 ### Phase 5: Tool-Aware Routing & Hybrid Delegation (v1.2.0)
 - Tool-intensity pattern detection (file scanning, multi-file edits, test runs)
-- Opus Orchestrator mode for complex multi-step tasks
 - Smart delegation: Opus handles strategy, spawns Haiku/Sonnet for subtasks
 - Escalation paths: Sonnet can recommend Opus for architectural decisions
 - Enhanced cost tracking with delegation metrics (~40% additional savings)
 
 ### Phase 6: Performance, Context Forking & Multi-Turn Awareness (v2.0.0)
 - **Performance optimizations**: Pre-compiled regex (~10-15% faster), early exit, in-memory LRU cache
-- **Context forking**: `/orchestrate` for clean subtask isolation, `/router-analytics` for dashboard generation
 - **Multi-turn awareness**: Session state tracking, follow-up detection, context-aware confidence boost
 - **Error recovery**: `/retry` command for model escalation when queries fail or need more depth
 - **Analytics dashboard**: `/router-analytics` generates interactive HTML charts
@@ -39,6 +37,13 @@
 - **Removed knowledge base system**: Dropped persistent learning, `/learn*` commands, and knowledge-informed routing
 - **Removed router-plugins**: Dropped optional plugin integration framework (hookify, ralph-loop, code-review, feature-dev)
 - Streamlined hook logic, kept in-memory classification cache
+
+### Phase 8: Swarm Mode (v2.2.0)
+- **`/swarm`**: Launch 5-30 parallel agents with worktree isolation
+- **Opus Coordinator**: Decomposes complex tasks into parallel subtasks
+- **Mixed models**: Haiku (reads), Sonnet (implementations), Opus (critical decisions)
+- **Auto-merge**: All worktree changes merge back to starting branch
+- **Fault tolerance**: Failed agents retry, persistent failures reported but don't block others
 
 ---
 

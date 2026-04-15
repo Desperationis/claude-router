@@ -30,7 +30,7 @@ Reads your routing statistics from `~/.claude/router-stats.json` and generates a
 ### Summary Cards
 - Total queries processed
 - Total estimated savings vs always-Opus
-- Route distribution (fast/standard/deep/orchestrated)
+- Route distribution (fast/standard/deep/complex)
 - Average confidence scores
 
 ### Charts
