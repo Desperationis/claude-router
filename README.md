@@ -30,7 +30,7 @@
 
 ```bash
 # Step 1: Add the marketplace (one-time, per project)
-/plugin marketplace add 0xrdan/claude-plugins
+/plugin marketplace add Desperationis/desperationis-plugins
 
 # Step 2: Install the plugin
 /plugin install claude-router
@@ -42,18 +42,12 @@ That's it! The plugin automatically routes queries - no configuration needed.
 
 ```bash
 # Update
-/plugin marketplace update 0xrdan-plugins
+/plugin marketplace update desperationis-plugins
 
 # Uninstall
 /plugin uninstall claude-router
 ```
 
-> **Migrating from old marketplace?** If you previously installed via `claude-router-marketplace`, run:
-> ```bash
-> /plugin uninstall claude-router@claude-router-marketplace
-> /plugin marketplace remove claude-router-marketplace
-> ```
-> Then follow the installation steps above.
 
 ## Quick Start
 
@@ -127,5 +121,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-**Built for the Claude Code community** | [Report Issues](https://github.com/0xrdan/claude-router/issues) | [@dannymonteiro](https://linkedin.com/in/dannymonteiro)
+**Built for the Claude Code community** | [Report Issues](https://github.com/Desperationis/claude-router/issues) | [@dannymonteiro](https://linkedin.com/in/dannymonteiro)
 

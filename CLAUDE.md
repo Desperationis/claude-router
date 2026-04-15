@@ -11,7 +11,7 @@ Subagent mapping:
 - standard → `claude-router:standard-executor`
 - deep → `claude-router:deep-executor`
 
-Exceptions: Slash commands (`/route`, `/router-stats`) and questions about the router itself.
+Exceptions: Slash commands (`/route`, `/router-stats`, `/router-stats-reset`, `/orchestrate`, `/router-analytics`, `/retry`) and questions about the router itself.
 
 ## Version Management
 

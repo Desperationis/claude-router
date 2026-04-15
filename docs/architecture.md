@@ -13,6 +13,7 @@ claude-router/
 │   ├── commands/                  # Slash command definitions
 │   │   ├── route.md
 │   │   ├── router-stats.md
+│   │   ├── router-stats-reset.md  # (v2.1)
 │   │   ├── orchestrate.md         # (v2.0)
 │   │   ├── router-analytics.md    # (v2.0)
 │   │   └── retry.md               # (v2.0)
@@ -21,6 +22,7 @@ claude-router/
 │   ├── skills/
 │   │   ├── route/                 # Manual routing skill
 │   │   ├── router-stats/          # Statistics skill
+│   │   ├── router-stats-reset/    # Reset statistics (v2.1)
 │   │   ├── orchestrate/           # Forked orchestration (v2.0)
 │   │   ├── router-analytics/      # HTML dashboard (v2.0)
 │   │   └── retry/                 # Error recovery (v2.0)
@@ -45,7 +47,6 @@ The heart of Claude Router. This hook:
 
 **Key features (v2.0):**
 - Pre-compiled regex patterns for speed
-- In-memory LRU cache for repeated queries
 - Session state tracking for multi-turn awareness
 - Follow-up query detection
 
@@ -66,6 +67,7 @@ Skills implement the actual functionality behind slash commands:
 |-------|---------|-------------|
 | `route` | `/route` | Manual model override |
 | `router-stats` | `/router-stats` | Usage statistics |
+| `router-stats-reset` | `/router-stats-reset` | Reset statistics |
 | `orchestrate` | `/orchestrate` | Forked task execution |
 | `router-analytics` | `/router-analytics` | HTML dashboard |
 | `retry` | `/retry` | Error recovery |
@@ -82,8 +84,8 @@ User Query
 │  UserPromptSubmit Hook          │
 │  (classify-prompt.py)           │
 ├─────────────────────────────────┤
-│  1. Check in-memory cache       │
-│  2. Rule-based classification   │
+│  1. Rule-based classification   │
+│  2. Context boost (follow-ups)  │
 │  3. LLM fallback (if needed)    │
 │  4. Session state update        │
 │  5. Inject routing directive    │

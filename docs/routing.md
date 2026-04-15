@@ -63,7 +63,7 @@ Signals: architecture, refactor across the entire codebase
 **Follow-up query with context awareness (v2.0):**
 ```
 [Claude Router] MANDATORY ROUTING DIRECTIVE
-Route: deep | Model: Opus | Confidence: 92% | Method: rules | Follow-up: Yes | Context boost: +0.1
+Route: deep | Model: Opus | Confidence: 92% | Method: rules | Follow-up: Yes | Context: follow_up_to_deep
 Signals: follow-up to previous complex query
 ```
 

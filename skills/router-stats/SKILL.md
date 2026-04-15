@@ -89,7 +89,7 @@ Route Distribution:
 1. Use the Read tool to read `~/.claude/router-stats.json`
 2. If the file doesn't exist, inform the user that no stats are available yet
 3. Calculate percentages for route distribution
-4. Display exception counts if present (router_meta queries are handled by Opus despite classification)
+4. Display exception counts if present (router_meta queries are tracked separately but still routed by normal classification)
 5. Format and display the statistics
 6. Include the savings comparison explanation
 

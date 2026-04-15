@@ -3,17 +3,27 @@
 Claude Router - UserPromptSubmit Hook
 Classifies prompts using hybrid approach:
 1. Rule-based patterns (instant, free)
-2. Haiku LLM fallback for low-confidence cases (~$0.001)
+2. LLM fallback for low-confidence cases:
+   - SDK (if ANTHROPIC_API_KEY set) - fastest
+   - CLI (claude -p) - uses existing subscription
 
-Part of claude-router: https://github.com/0xrdan/claude-router
+Part of claude-router: https://github.com/Desperationis/claude-router
 """
 import json
 import sys
 import os
 import re
-import hashlib
+import subprocess
+import shutil
 from pathlib import Path
 from datetime import datetime
+
+# Reentrancy guard - prevents infinite recursion when using CLI classification
+# The hook sets this env var before calling `claude -p`, so the child process
+# sees it and exits immediately without re-classifying
+REENTRANCY_ENV_VAR = "CLAUDE_ROUTER_CLASSIFYING"
+if os.environ.get(REENTRANCY_ENV_VAR) == "1":
+    sys.exit(0)
 # Cross-platform file locking
 import platform
 if platform.system() == "Windows":
@@ -33,7 +43,8 @@ else:
         fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
 # Confidence threshold for LLM fallback
-CONFIDENCE_THRESHOLD = 0.7
+# Set high (0.95) to use LLM classification for nearly all queries
+CONFIDENCE_THRESHOLD = 0.95
 
 # Stats file location
 STATS_FILE = Path.home() / ".claude" / "router-stats.json"
@@ -49,8 +60,8 @@ COST_PER_1M = {
 AVG_INPUT_TOKENS = 1000
 AVG_OUTPUT_TOKENS = 2000
 
-# Exception patterns - queries that will be handled by Opus despite classification
-# (router meta-questions, slash commands handled in main())
+# Exception patterns - queries flagged as router-meta for stats attribution
+# (still routed by normal classification, just tracked separately in stats)
 # Pre-compiled for performance
 EXCEPTION_PATTERNS = [
     re.compile(r'\brouter\b.*\b(stats?|config|setting|work)'),
@@ -59,11 +70,6 @@ EXCEPTION_PATTERNS = [
     re.compile(r'\bexception\b.*\b(track|detect)'),
     re.compile(r'\bclassif(y|ication)\b.*\b(prompt|query)'),
 ]
-
-# In-memory classification cache (avoids recomputation for repeated queries in same session)
-# LRU-style: limited to 50 entries, cleared on process restart
-_MEMORY_CACHE = {}
-_MEMORY_CACHE_MAX = 50
 
 # Session state file for multi-turn context awareness
 SESSION_STATE_FILE = Path.home() / ".claude" / "router-session.json"
@@ -144,63 +150,12 @@ def apply_context_boost(result: dict, session_state: dict, is_follow_up: bool) -
     return result
 
 
-def generate_fingerprint(prompt: str) -> str:
-    """Generate a fingerprint for a prompt to enable fuzzy cache matching."""
-    # Normalize: lowercase, strip, collapse whitespace
-    normalized = re.sub(r'\s+', ' ', prompt.lower().strip())
+def is_exception_query(prompt: str) -> tuple[bool, str | None]:
+    """Check if query matches router-meta patterns for stats attribution.
 
-    # Extract key terms (remove common words)
-    stop_words = {'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
-                  'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
-                  'would', 'could', 'should', 'may', 'might', 'must', 'can',
-                  'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
-                  'this', 'that', 'these', 'those', 'it', 'its', 'i', 'me', 'my'}
-
-    words = re.findall(r'\b[a-z]+\b', normalized)
-    key_terms = [w for w in words if w not in stop_words and len(w) > 2]
-
-    # Sort for consistency and take first 10 terms
-    key_terms = sorted(set(key_terms))[:10]
-    fingerprint_str = ' '.join(key_terms)
-
-    # Generate hash
-    return hashlib.md5(fingerprint_str.encode()).hexdigest()[:12]
-
-
-def check_classification_cache(prompt: str) -> dict:
-    """Check if a similar query exists in the in-memory cache."""
-    fingerprint = generate_fingerprint(prompt)
-
-    # Check in-memory cache (no I/O)
-    if fingerprint in _MEMORY_CACHE:
-        result = _MEMORY_CACHE[fingerprint].copy()
-        result["metadata"] = result.get("metadata", {})
-        result["metadata"]["memory_cache_hit"] = True
-        return result
-
-    return None
-
-
-def write_classification_cache(prompt: str, result: dict):
-    """Write a classification result to the in-memory cache."""
-    global _MEMORY_CACHE
-
-    fingerprint = generate_fingerprint(prompt)
-
-    # Simple LRU: if at max, remove oldest entry
-    if len(_MEMORY_CACHE) >= _MEMORY_CACHE_MAX:
-        oldest_key = next(iter(_MEMORY_CACHE))
-        del _MEMORY_CACHE[oldest_key]
-    _MEMORY_CACHE[fingerprint] = {
-        "route": result["route"],
-        "confidence": result["confidence"],
-        "signals": result.get("signals", []),
-        "method": "cache",
-    }
-
-
-def is_exception_query(prompt: str) -> tuple[bool, str]:
-    """Check if query matches exception patterns that bypass routing."""
+    Returns (True, 'router_meta') for queries about the router itself.
+    These are still routed normally, just tracked separately in stats.
+    """
     prompt_lower = prompt.lower()
     for pattern in EXCEPTION_PATTERNS:
         if pattern.search(prompt_lower):  # Pre-compiled patterns use .search()
@@ -606,16 +561,99 @@ Return JSON only:
         return None
 
 
+def classify_by_cli(prompt: str) -> dict:
+    """
+    Classify prompt using the claude CLI with Haiku.
+    Used as fallback when no API key is set but claude CLI is available.
+    Uses the user's existing Claude subscription (OAuth/keychain auth).
+
+    Returns None on any failure (timeout, CLI not found, parse error).
+    """
+    # Check if claude CLI is available
+    if not shutil.which("claude"):
+        return None
+
+    # Keep prompt short to minimize latency - Haiku is smart enough
+    classification_prompt = f'''Classify this query. Reply with ONLY one word: fast, standard, or deep.
+
+Query: "{prompt[:200]}"
+
+fast = simple questions, syntax, formatting, git commands
+standard = bug fixes, features, refactoring, tests, code changes
+deep = architecture, security, multi-file refactors, system design
+
+One word answer:'''
+
+    try:
+        # Set reentrancy guard to prevent infinite loop
+        env = os.environ.copy()
+        env[REENTRANCY_ENV_VAR] = "1"
+
+        # Call claude CLI with Haiku model
+        # --print: non-interactive mode, just print response
+        # --model haiku: use cheapest/fastest model
+        # --output-format json: get structured output envelope
+        result = subprocess.run(
+            ["claude", "--print", "--model", "haiku", "--output-format", "json", classification_prompt],
+            capture_output=True,
+            text=True,
+            timeout=8.0,  # Allow up to 8s for CLI startup + API call
+            env=env,
+        )
+
+        if result.returncode != 0:
+            return None
+
+        # Parse the outer JSON envelope from --output-format json
+        try:
+            outer = json.loads(result.stdout)
+            # The actual response is in the 'result' field
+            response_text = outer.get("result", "").strip().lower()
+        except json.JSONDecodeError:
+            response_text = result.stdout.strip().lower()
+
+        # Extract the route from the response (should be just one word)
+        # Handle potential markdown or extra text
+        response_text = response_text.replace("```", "").strip()
+
+        # Map response to route
+        if "deep" in response_text[:20]:
+            route = "deep"
+        elif "standard" in response_text[:20]:
+            route = "standard"
+        elif "fast" in response_text[:20]:
+            route = "fast"
+        else:
+            # Couldn't parse response
+            return None
+
+        return {
+            "route": route,
+            "confidence": 0.85,  # LLM classification is generally reliable
+            "signals": ["cli-classified"],
+            "method": "haiku-cli"
+        }
+
+    except subprocess.TimeoutExpired:
+        print("[claude-router] CLI classification timed out, falling back to rules", file=sys.stderr)
+        return None
+    except (json.JSONDecodeError, KeyError, FileNotFoundError) as e:
+        print(f"[claude-router] CLI classification error: {e}", file=sys.stderr)
+        return None
+    except Exception as e:
+        print(f"[claude-router] CLI classification unexpected error: {e}", file=sys.stderr)
+        return None
+
+
 def classify_hybrid(prompt: str) -> dict:
     """
-    Hybrid classification: cache first, then rules, then LLM fallback,
-    then context boost.
-    """
-    # Step 0: Check cache for similar query (instant)
-    cached = check_classification_cache(prompt)
-    if cached:
-        return cached
+    Hybrid classification: rules first, then context boost, then LLM fallback.
 
+    LLM fallback priority:
+    1. SDK (if ANTHROPIC_API_KEY set) - fastest, ~500ms
+    2. CLI (if claude command available) - uses subscription, ~1-2s
+    3. Return rule-based result
+    """
     # Step 1: Rule-based classification (instant, free)
     result = classify_by_rules(prompt)
 
@@ -625,18 +663,19 @@ def classify_hybrid(prompt: str) -> dict:
     if follow_up:
         result = apply_context_boost(result, session_state, follow_up)
 
-    # Step 3: If low confidence and API key available, use LLM
+    # Step 3: If low confidence, try LLM classification
     if result["confidence"] < CONFIDENCE_THRESHOLD:
+        # Priority 1: SDK (fastest, requires API key)
         api_key = get_api_key()
         if api_key:
             llm_result = classify_by_llm(prompt, api_key)
             if llm_result:
-                # Cache LLM result (more expensive to compute)
-                write_classification_cache(prompt, llm_result)
                 return llm_result
 
-    # Step 4: Cache the result for future queries
-    write_classification_cache(prompt, result)
+        # Priority 2: CLI (uses existing subscription, no API key needed)
+        cli_result = classify_by_cli(prompt)
+        if cli_result:
+            return cli_result
 
     return result
 
