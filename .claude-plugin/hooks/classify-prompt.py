@@ -333,6 +333,29 @@ PATTERNS = {
         re.compile(r"\band (also|then)\b.{0,50}\band (also|then)\b"),
         re.compile(r"\b(multiple|several|many) (tasks?|steps?|operations?)\b"),
     ],
+    "debugging": [
+        # Explicit debugging/error language (with and without apostrophes for informal typing)
+        re.compile(r"\b(doesn'?t|does not|isn'?t|is not|won'?t|will not|can'?t|cannot) (work|run|compile|build|start|load)\b"),
+        re.compile(r"\bnot working\b"),
+        re.compile(r"\b(this|it|that).{0,20}(doesn'?t|isn'?t|won'?t) work\b"),
+        re.compile(r"\bisn'?t working\b"),
+        re.compile(r"\b(broken|breaking|broke)\b"),
+        re.compile(r"\b(bug|bugs|buggy)\b"),
+        re.compile(r"\b(error|errors|erroring)\b"),
+        re.compile(r"\b(fail|fails|failing|failed)\b"),
+        re.compile(r"\b(crash|crashes|crashing|crashed)\b"),
+        re.compile(r"\b(wrong|incorrect|unexpected)\s+(output|result|behavior|value)\b"),
+        re.compile(r"\bhelp.{0,15}(debug|figure out|understand why|find out why)\b"),
+        re.compile(r"\b(fix|debug|troubleshoot)\b"),
+        re.compile(r"\bwhy (is|does|doesn't|isn't|won't)\b"),
+        re.compile(r"\b(don'?t|do not) know (why|what|how)\b"),
+        re.compile(r"\bno idea (why|what|how)\b"),
+        re.compile(r"\bcan'?t (figure out|understand|tell)\b"),
+        re.compile(r"\bsomething.{0,20}(wrong|off|broken|weird)\b"),
+        re.compile(r"\bit (says|shows|returns|gives).{0,30}(error|exception|null|undefined|NaN)\b"),
+        re.compile(r"\b(throws?|throwing|raised?|raising) (an? )?(error|exception)\b"),
+        re.compile(r"\bgetting (an? )?(error|exception|warning)\b"),
+    ],
 }
 
 
@@ -520,6 +543,7 @@ def classify_by_rules(prompt: str) -> dict:
     deep_signals = []
     tool_signals = []
     orch_signals = []
+    debug_signals = []
 
     # Check for deep patterns first (highest priority)
     # Pre-compiled patterns use .search() method directly
@@ -529,6 +553,15 @@ def classify_by_rules(prompt: str) -> dict:
             deep_signals.append(match.group(0))
             # Early exit: if we have 3+ deep signals, no need to check more
             if len(deep_signals) >= 3:
+                break
+
+    # Check for debugging/complaint patterns (user saying something doesn't work)
+    for pattern in PATTERNS.get("debugging", []):
+        match = pattern.search(prompt_lower)
+        if match:
+            debug_signals.append(match.group(0))
+            # Early exit: if we have 2+ debug signals, we have enough
+            if len(debug_signals) >= 2:
                 break
 
     # Check for tool-intensive patterns
@@ -566,6 +599,45 @@ def classify_by_rules(prompt: str) -> dict:
 
     if deep_signals:  # One deep signal
         return {"route": "deep", "confidence": 0.7, "signals": deep_signals, "method": "rules"}
+
+    # Debugging/complaint patterns - user says something doesn't work
+    # Route to standard (known-ish location) or deep (vague/unknown root cause)
+    if debug_signals:
+        # Vague complaints with no specific location → deep (unknown root cause)
+        vague_patterns = [
+            re.compile(r"\bsomething\b"),
+            re.compile(r"\bsomewhere\b"),
+            re.compile(r"\b(don'?t|do not) know (why|what|where|how)\b"),
+            re.compile(r"\bno idea (why|what|how)\b"),
+            re.compile(r"\b(can'?t|cannot) (find|figure|understand)\b"),
+            re.compile(r"\bwhy (is|does|doesn'?t|isn'?t)\b"),
+        ]
+        is_vague = any(p.search(prompt_lower) for p in vague_patterns)
+
+        if is_vague or len(debug_signals) >= 3:
+            return {
+                "route": "deep",
+                "confidence": 0.85,
+                "signals": debug_signals[:3],
+                "method": "rules",
+                "metadata": {"debugging": True, "vague_complaint": True}
+            }
+        if len(debug_signals) >= 2:
+            return {
+                "route": "standard",
+                "confidence": 0.85,
+                "signals": debug_signals[:3],
+                "method": "rules",
+                "metadata": {"debugging": True}
+            }
+        # Single debug signal - route to standard with moderate confidence
+        return {
+            "route": "standard",
+            "confidence": 0.75,
+            "signals": debug_signals,
+            "method": "rules",
+            "metadata": {"debugging": True}
+        }
 
     # Tool-intensive but not architecturally complex - route to standard
     if tool_signals:
@@ -776,7 +848,9 @@ EXAMPLES:
 "add pagination to /users" -> standard - feature, clear scope
 "random 401 errors, help debug" -> deep - unknown root cause
 
-Reason must explain WHY, not restate route name.'''
+Reason must explain WHY, not restate route name.
+
+JSON:'''
 
     try:
         # Set reentrancy guard to prevent infinite loop
@@ -926,6 +1000,11 @@ def build_routing_reason(result: dict) -> str:
 
     # 2. Synthesize from metadata
     metadata_reasons = []
+    if metadata.get("debugging"):
+        if metadata.get("vague_complaint"):
+            metadata_reasons.append("debugging request with unknown root cause")
+        else:
+            metadata_reasons.append("debugging/troubleshooting request")
     if metadata.get("orchestration"):
         metadata_reasons.append("multi-step orchestration")
     if metadata.get("tool_intensive"):
@@ -1064,6 +1143,29 @@ Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>
                 }
                 print(json.dumps(output))
                 sys.exit(0)
+
+        # Special handling for /swarm - DO NOT route to a subagent.
+        # The swarm orchestrator needs to spawn worker agents, but subagents
+        # cannot spawn further subagents (Agent tool not available to them).
+        # Solution: Let the main agent handle swarm orchestration directly.
+        # The skill will tell main agent to read swarm-coordinator.md and
+        # follow those instructions, spawning worker agents from top-level.
+        if stripped.startswith("/swarm"):
+            # Log /swarm for stats tracking
+            log_routing_decision(
+                "deep",
+                1.0,
+                "explicit",
+                ["/swarm"],
+                {"exception_type": "slash_commands", "slash_command": "/swarm"},
+            )
+
+            # Update session state so follow-ups see this as a deep route
+            update_session_state("deep", {"explicit": True, "slash_command": "/swarm"})
+
+            # Exit WITHOUT emitting a routing directive - let the skill handle it
+            # The skill will tell main agent to orchestrate directly (not as subagent)
+            sys.exit(0)
 
         # Log slash command to stats (skills handle the actual command)
         # Extract command name for tracking - use "none" as route since no routing happens
