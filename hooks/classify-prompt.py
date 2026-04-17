@@ -1067,57 +1067,27 @@ Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>
                 print(json.dumps(output))
                 sys.exit(0)
 
-        # Special handling for /swarm - force Opus for the coordinator.
-        # The swarm-coordinator must decompose tasks into the correct
-        # executor mix; running it on Haiku or Sonnet causes it to emit
-        # malformed subagent_type values and generic agents. Route the
-        # /swarm command itself to Opus unconditionally, mirroring the
-        # /route opus path.
+        # Special handling for /swarm - DO NOT route to a subagent.
+        # The swarm orchestrator needs to spawn worker agents, but subagents
+        # cannot spawn further subagents (Agent tool not available to them).
+        # Solution: Let the main agent handle swarm orchestration directly.
+        # The skill will tell main agent to read swarm-coordinator.md and
+        # follow those instructions, spawning worker agents from top-level.
         if stripped.startswith("/swarm"):
-            # Accept either "/swarm" alone or "/swarm <task>"
-            swarm_args = prompt.strip()[6:].strip()  # everything after "/swarm"
-
-            # Log /swarm as a slash command for stats, but also mark it as
-            # an explicit-Opus route so analytics can see the escalation.
+            # Log /swarm for stats tracking
             log_routing_decision(
                 "deep",
                 1.0,
                 "explicit",
                 ["/swarm"],
-                {"exception_type": "explicit_route", "slash_command": "/swarm"},
+                {"exception_type": "slash_commands", "slash_command": "/swarm"},
             )
 
             # Update session state so follow-ups see this as a deep route
             update_session_state("deep", {"explicit": True, "slash_command": "/swarm"})
 
-            context = f"""[Claude Router] /swarm EXPLICIT OPUS ROUTE
-Route: deep | Model: Opus | Source: /swarm command
-
-The /swarm command MUST run its coordinator on Opus. The swarm-coordinator
-decomposes the task into 5-30 parallel subtasks and assigns each to the
-correct executor (fast/standard/deep). Running the coordinator on anything
-less than Opus causes drift in subagent_type values and a generic-agent
-failure mode.
-
-CRITICAL: Invoke the swarm skill via the swarm-coordinator subagent. Do NOT
-reclassify this query. Do NOT route it through standard-executor. The
-coordinator's own frontmatter pins it to claude-opus-4-5-20251101 — let that
-be the single source of truth, and do NOT pass a model= parameter on the
-Task call.
-
-Task arguments: {swarm_args if swarm_args else '(none - user invoked /swarm with no task)'}
-
-Example:
-Task(subagent_type="claude-router:swarm-coordinator", prompt="{swarm_args}", description="Swarm coordinator")"""
-
-            output = {
-                "systemMessage": "→ /swarm routing coordinator to Opus (explicit)",
-                "hookSpecificOutput": {
-                    "hookEventName": "UserPromptSubmit",
-                    "additionalContext": context,
-                },
-            }
-            print(json.dumps(output))
+            # Exit WITHOUT emitting a routing directive - let the skill handle it
+            # The skill will tell main agent to orchestrate directly (not as subagent)
             sys.exit(0)
 
         # Log slash command to stats (skills handle the actual command)

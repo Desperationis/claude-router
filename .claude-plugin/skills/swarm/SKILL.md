@@ -16,24 +16,38 @@ Launch a swarm of parallel agents to tackle complex tasks across your codebase.
 
 ## Instructions
 
-When invoked, immediately spawn the swarm-coordinator agent with the user's task:
+**IMPORTANT: You (the main agent) orchestrate the swarm directly. Do NOT spawn a swarm-coordinator subagent — subagents cannot spawn further agents.**
 
-```
-Agent(
-  description="Coordinate swarm for: <brief task summary>",
-  prompt="$ARGUMENTS",
-  subagent_type="claude-router:swarm-coordinator",
-  model="opus"
-)
-```
+When invoked:
 
-The swarm-coordinator will:
-1. Decompose the task into 5-30 parallel subtasks
-2. Launch all agents simultaneously in isolated worktrees
-3. Stream results as agents complete
-4. Retry failed agents automatically
-5. Merge all changes back to the starting branch
-6. Provide a final synthesis
+1. **Read the orchestration instructions:**
+   ```
+   Read("agents/swarm-coordinator.md")
+   ```
+
+2. **Follow those instructions directly** to:
+   - Decompose the task into 5-30 parallel subtasks (Phase 1)
+   - Verify consistency (Phase 1.5)
+   - Launch ALL worker agents in a SINGLE message (Phase 2)
+   - Verify launch (Phase 2.5)
+   - Monitor results and retry failures (Phase 3)
+   - Merge worktree changes (Phase 4)
+   - Synthesize final report (Phase 5)
+
+3. **Spawn worker agents using:**
+   ```
+   Agent(
+     description="<task summary>",
+     prompt="<full task instructions>",
+     subagent_type="claude-router:fast-executor",  # or standard-executor or deep-executor
+     isolation="worktree"
+   )
+   ```
+
+The three executor types and when to use them:
+- `claude-router:fast-executor` — read-only tasks OR trivial single-file mechanical edits
+- `claude-router:standard-executor` — real implementation work within one file
+- `claude-router:deep-executor` — cross-file reasoning, security, architecture
 
 ## What Makes a Good Swarm Task
 
