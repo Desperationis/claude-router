@@ -1,6 +1,6 @@
 {
   "name": "claude-router",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "Intelligent model routing for Claude Code - routes queries to optimal Claude model (Haiku/Sonnet/Opus) based on complexity, with parallel agent swarms and multi-turn awareness",
   "author": {
     "name": "Diego Contreras"

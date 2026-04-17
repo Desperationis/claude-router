@@ -959,6 +959,16 @@ def main():
     except json.JSONDecodeError:
         sys.exit(0)
 
+    try:
+        _main_inner(input_data)
+    except Exception as e:
+        # Log to stderr for debugging, but exit cleanly to avoid blocking user
+        print(f"[claude-router] Hook crashed: {type(e).__name__}: {e}", file=sys.stderr)
+        sys.exit(0)
+
+
+def _main_inner(input_data: dict):
+    """Inner main logic, wrapped by main() for error handling."""
     prompt = input_data.get("prompt", "")
 
     if not prompt or len(prompt) < 10:
