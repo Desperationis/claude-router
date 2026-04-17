@@ -1,6 +1,6 @@
 {
   "name": "claude-router",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "description": "Intelligent model routing for Claude Code - routes queries to optimal Claude model (Haiku/Sonnet/Opus) based on complexity, with parallel agent swarms and multi-turn awareness",
   "author": {
     "name": "Diego Contreras"
@@ -19,16 +19,12 @@
     "./commands/route.md",
     "./commands/router-stats.md",
     "./commands/router-stats-reset.md",
-    "./commands/swarm.md",
-    "./commands/router-analytics.md",
-    "./commands/retry.md"
+    "./commands/swarm.md"
   ],
   "skills": [
     "./skills/route/SKILL.md",
     "./skills/router-stats/SKILL.md",
     "./skills/router-stats-reset/SKILL.md",
-    "./skills/swarm/SKILL.md",
-    "./skills/router-analytics/SKILL.md",
-    "./skills/retry/SKILL.md"
+    "./skills/swarm/SKILL.md"
   ]
 }
