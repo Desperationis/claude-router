@@ -14,10 +14,10 @@ Read the stats file at `~/.claude/router-stats.json` and present the data in a c
 
 ## Data Format
 
-The stats file contains (v1.2 schema):
+The stats file contains (v1.3 schema):
 ```json
 {
-  "version": "1.2",
+  "version": "1.3",
   "total_queries": 100,
   "routes": {"fast": 30, "standard": 50, "deep": 10, "complex": 10},
   "exceptions": {"router_meta": 2, "slash_commands": 3, "explicit_route": 1, "explicit_retry": 1},
@@ -25,6 +25,8 @@ The stats file contains (v1.2 schema):
   "complex_queries": 10,
   "estimated_savings": 12.50,
   "delegation_savings": 2.50,
+  "total_actual_cost": 2.50,
+  "total_opus_cost": 15.00,
   "sessions": [
     {
       "date": "2026-01-03",
@@ -75,6 +77,13 @@ Estimated Savings:   $12.50  (compared to always using Opus)
 Delegation Savings:  $2.50   (from hybrid delegation)
 Total Savings:       $15.00
 
+📈 Cost Efficiency
+───────────────────────────────────────────────────
+Actual Cost:      $2.50
+Opus-Only Cost:   $15.00
+You're paying:    16.7% of Opus-only cost
+Efficiency Gain:  6x improvement (500% more efficient)
+
 📅 Today (2026-01-03)
 ───────────────────────────────────────────────────
 Queries: 25
@@ -90,8 +99,12 @@ Route Distribution:
 2. If the file doesn't exist, inform the user that no stats are available yet
 3. Calculate percentages for route distribution
 4. Display exception counts if present (router_meta queries are tracked separately but still routed by normal classification)
-5. Format and display the statistics
-6. Include the savings comparison explanation
+5. Calculate cost efficiency metrics:
+   - `percent_of_opus = (total_actual_cost / total_opus_cost) * 100` (e.g., "16.7%")
+   - `efficiency_multiplier = total_opus_cost / total_actual_cost` (e.g., "6x")
+   - `percent_improvement = (efficiency_multiplier - 1) * 100` (e.g., "500%")
+6. Format and display the statistics including the Cost Efficiency section
+7. Include the savings comparison explanation
 
 ## Notes
 

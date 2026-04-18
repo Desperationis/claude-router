@@ -407,7 +407,7 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
 
         # Load existing stats or create new (v1.2 schema with exception tracking)
         stats = {
-            "version": "1.2",
+            "version": "1.3",
             "total_queries": 0,
             "routes": {"fast": 0, "standard": 0, "deep": 0, "complex": 0},
             "exceptions": {"router_meta": 0, "slash_commands": 0, "explicit_route": 0, "explicit_retry": 0},
@@ -415,6 +415,8 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
             "complex_queries": 0,
             "estimated_savings": 0.0,
             "delegation_savings": 0.0,
+            "total_actual_cost": 0.0,
+            "total_opus_cost": 0.0,
             "sessions": [],
             "last_updated": None
         }
@@ -428,8 +430,8 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
             except (json.JSONDecodeError, IOError):
                 pass
 
-        # Ensure v1.2 schema fields exist (migration from v1.0/v1.1)
-        stats.setdefault("version", "1.2")
+        # Ensure v1.3 schema fields exist (migration from v1.0/v1.1/v1.2)
+        stats.setdefault("version", "1.3")
         stats.setdefault("routes", {}).setdefault("complex", 0)
         # Properly migrate exceptions dict - merge sub-keys individually
         exceptions = stats.setdefault("exceptions", {})
@@ -438,6 +440,8 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
         stats.setdefault("tool_intensive_queries", 0)
         stats.setdefault("complex_queries", 0)
         stats.setdefault("delegation_savings", 0.0)
+        stats.setdefault("total_actual_cost", 0.0)
+        stats.setdefault("total_opus_cost", 0.0)
 
         metadata = metadata or {}
         exception_type = metadata.get("exception_type")
@@ -476,6 +480,8 @@ def log_routing_decision(route: str, confidence: float, method: str, signals: li
         opus_cost = calculate_cost("deep")
         savings = opus_cost - actual_cost
         stats["estimated_savings"] += savings
+        stats["total_actual_cost"] += actual_cost
+        stats["total_opus_cost"] += opus_cost
 
         # Calculate delegation savings for complex queries
         # Assumes 60% delegation (70% Haiku, 30% Sonnet) saves ~40% vs pure Opus

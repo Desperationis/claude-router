@@ -25,10 +25,10 @@ Display usage statistics and estimated cost savings from Claude Router.
 
 ## Data Format
 
-The stats file contains (v1.2 schema):
+The stats file contains (v1.3 schema):
 ```json
 {
-  "version": "1.2",
+  "version": "1.3",
   "total_queries": 100,
   "routes": {"fast": 30, "standard": 50, "deep": 8, "complex": 5},
   "exceptions": {"router_meta": 2, "slash_commands": 3, "explicit_route": 1, "explicit_retry": 1},
@@ -36,6 +36,8 @@ The stats file contains (v1.2 schema):
   "complex_queries": 5,
   "estimated_savings": 12.50,
   "delegation_savings": 2.00,
+  "total_actual_cost": 2.50,
+  "total_opus_cost": 15.00,
   "sessions": [
     {
       "date": "2026-01-03",
@@ -79,6 +81,12 @@ Value Metrics:
   Estimated Tokens Saved: ~2.7M tokens
   Avg Cost per Query: $0.02 (vs $0.055 with Opus 4.5)
 
+Cost Efficiency:
+  Actual Cost:     $2.50
+  Opus-Only Cost:  $15.00
+  You're paying:   16.7% of Opus-only cost
+  Efficiency Gain: 6x improvement (500% more efficient)
+
 Today
 -----
 Queries: 25
@@ -105,6 +113,9 @@ If you're on Claude Pro or Max, these metrics translate to real benefits:
 - **Estimated Savings**: Total cost saved compared to always using Opus (API users)
 - **Estimated Tokens Saved**: Approximate tokens conserved by using efficient models
 - **Avg Cost per Query**: Your actual average cost vs what Opus would cost
+- **Cost Efficiency**:
+  - **You're paying X%**: Your actual cost as a percentage of what Opus-only would cost (lower = better)
+  - **Efficiency Gain**: How many times more efficient routing is vs Opus-only (e.g., "6x" = 6 times cheaper)
 
 ## Cost Reference
 
