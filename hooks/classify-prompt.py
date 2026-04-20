@@ -86,6 +86,10 @@ FOLLOW_UP_PATTERNS = [
     re.compile(r"^(actually|wait|instead|rather)"),
 ]
 
+# Slash command pattern - detects /word at word boundaries (not file paths)
+# Must be preceded by whitespace or start of string
+SLASH_COMMAND_PATTERN = re.compile(r'(?:^|\s)/[a-zA-Z][a-zA-Z0-9_-]*')
+
 
 def get_session_state() -> dict:
     """Get the current session state for multi-turn context awareness."""
@@ -1059,7 +1063,15 @@ def _main_inner(input_data: dict):
     if not prompt or len(prompt) < 10:
         sys.exit(0)
 
-    # Handle slash commands
+    # Check for slash commands anywhere in the prompt (e.g., /confirm, /route)
+    # If found, skip routing entirely - let the current model handle it
+    if SLASH_COMMAND_PATTERN.search(prompt):
+        cmd_match = SLASH_COMMAND_PATTERN.search(prompt)
+        cmd_name = cmd_match.group(0) if cmd_match else "/"
+        log_routing_decision("none", 1.0, "slash_command", [cmd_name], {"exception_type": "slash_commands"})
+        sys.exit(0)
+
+    # Handle slash commands (legacy path - prompts starting with /)
     stripped = prompt.strip().lower()
     if stripped.startswith("/"):
         # Special handling for /route with explicit model
