@@ -2,13 +2,13 @@
 
 ## Claude Code: Default vs With Router
 
-### Default Behavior (Even with Opus 4.5)
+### Default Behavior (Even with Opus 4.7)
 
-Opus 4.5 is excellent at using tools and spawning subagents - but there's a catch:
+Opus 4.7 is excellent at using tools and spawning subagents - but there's a catch:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                     DEFAULT CLAUDE CODE (Opus 4.5)                          │
+│                     DEFAULT CLAUDE CODE (Opus 4.7)                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  User: "Refactor the auth system across all files"                          │
@@ -63,7 +63,7 @@ Claude Router adds **cost-aware routing at every level**:
 
 ### The Key Difference
 
-| Aspect | Default Opus 4.5 | Claude Router |
+| Aspect | Default Opus 4.7 | Claude Router |
 |--------|------------------|---------------|
 | Initial routing | Always Opus (or your default) | Right model for the task |
 | Subagent model | Inherits parent model | Explicitly cheaper models |
@@ -72,7 +72,7 @@ Claude Router adds **cost-aware routing at every level**:
 | Architectural decisions | Opus | Opus (same quality) |
 | Cost awareness | None | Built-in at every level |
 
-**TL;DR**: Opus 4.5 is great at *what* to delegate. Claude Router adds *cost-aware* delegation - ensuring cheap work uses cheap models.
+**TL;DR**: Opus 4.7 is great at *what* to delegate. Claude Router adds *cost-aware* delegation - ensuring cheap work uses cheap models.
 
 ---
 
@@ -88,10 +88,10 @@ LLM pricing has two components, and you save on both:
 |-------|----------------------|------------------------|
 | Haiku 4.5 | $1 | $5 |
 | Sonnet 4.5 | $3 | $15 |
-| Opus 4.5 | $5 | $25 |
+| Opus 4.7 | $5 | $25 |
 
 For a typical query (1K input, 2K output tokens):
-- **Opus 4.5 cost:** $0.005 + $0.05 = **$0.055**
+- **Opus 4.7 cost:** $0.005 + $0.05 = **$0.055**
 - **Haiku 4.5 cost:** $0.001 + $0.01 = **$0.011**
 - **Your savings:** ~80%
 

@@ -53,7 +53,7 @@ STATS_FILE = Path.home() / ".claude" / "router-stats.json"
 COST_PER_1M = {
     "fast": {"input": 1.0, "output": 5.0},        # Haiku 4.5
     "standard": {"input": 3.0, "output": 15.0},   # Sonnet 4.5
-    "deep": {"input": 5.0, "output": 25.0},       # Opus 4.5
+    "deep": {"input": 5.0, "output": 25.0},       # Opus 4.7
 }
 
 # Average tokens per query (rough estimate)

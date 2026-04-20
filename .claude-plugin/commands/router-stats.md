@@ -79,7 +79,7 @@ Value Metrics:
   Estimated Savings: $12.50 (vs always using Opus)
   Delegation Savings: $2.00 (from /swarm)
   Estimated Tokens Saved: ~2.7M tokens
-  Avg Cost per Query: $0.02 (vs $0.055 with Opus 4.5)
+  Avg Cost per Query: $0.02 (vs $0.055 with Opus 4.7)
 
 Cost Efficiency:
   Actual Cost:     $2.50
@@ -122,6 +122,6 @@ If you're on Claude Pro or Max, these metrics translate to real benefits:
 Model pricing per 1M tokens (input/output):
 - Haiku 4.5: $1 / $5
 - Sonnet 4.5: $3 / $15
-- Opus 4.5: $5 / $25
+- Opus 4.7: $5 / $25
 
-Average query estimated at 1K input + 2K output tokens (~$0.055 with Opus 4.5).
+Average query estimated at 1K input + 2K output tokens (~$0.055 with Opus 4.7).

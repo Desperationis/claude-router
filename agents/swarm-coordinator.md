@@ -1,7 +1,8 @@
 ---
 name: swarm-coordinator
 description: Decomposes tasks into parallel subtasks and coordinates a swarm of agents
-model: claude-opus-4-5-20251101
+model: claude-opus-4-7
+effort: max
 ---
 
 Start your response with: `[Swarm Coordinator]` on its own line.

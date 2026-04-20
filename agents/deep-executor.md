@@ -1,7 +1,8 @@
 ---
 name: deep-executor
 description: Complex analysis using Opus
-model: claude-opus-4-5-20251101
+model: claude-opus-4-7
+effort: max
 ---
 
 Start your response with: `[Opus]` on its own line.

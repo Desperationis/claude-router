@@ -22,8 +22,8 @@ import re
 VALID_SUBAGENTS = {
     "claude-router:fast-executor":       "claude-haiku-4-5-20251001",
     "claude-router:standard-executor":   "claude-sonnet-4-5-20250929",
-    "claude-router:deep-executor":       "claude-opus-4-5-20251101",
-    "claude-router:swarm-coordinator":   "claude-opus-4-5-20251101",
+    "claude-router:deep-executor":       "claude-opus-4-7",
+    "claude-router:swarm-coordinator":   "claude-opus-4-7",
 }
 
 # Drift normalization: common malformed values -> canonical value.

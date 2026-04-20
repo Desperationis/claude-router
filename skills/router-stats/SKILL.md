@@ -109,7 +109,7 @@ Route Distribution:
 ## Notes
 
 - Savings are calculated assuming Opus would have been used for all queries
-- Cost estimates use: Haiku 4.5 $1/$5, Sonnet 4.5 $3/$15, Opus 4.5 $5/$25 per 1M tokens
+- Cost estimates use: Haiku 4.5 $1/$5, Sonnet 4.5 $3/$15, Opus 4.7 $5/$25 per 1M tokens
 - Average query estimated at 1K input + 2K output tokens
 - **Exceptions are tracked separately**: Slash commands, explicit model selections (/route, /retry), and router meta-queries are counted in `exceptions`, not in `routes`. This prevents double-counting.
 - **No double counting**: `total_queries` = sum of routes + sum of exceptions. Route percentages and exception percentages should add up correctly.
