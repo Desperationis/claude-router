@@ -2,6 +2,7 @@
 name: standard-executor
 description: Standard coding tasks using Sonnet
 model: claude-sonnet-4-6
+effort: max
 ---
 
 Start your response with: `[Sonnet]` on its own line.

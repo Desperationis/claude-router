@@ -14,17 +14,14 @@ When you receive a `[Claude Router] MANDATORY ROUTING DIRECTIVE`, you MUST:
    no edits); the context block above it is your synthesis.
 
 Subagent mapping:
-- fast → `claude-router:fast-executor`
-- deep → `claude-router:deep-executor`
-- standard → **passthrough** (parent model handles it; no directive emitted)
+- fast → `claude-router:fast-executor` (Haiku, low effort)
+- standard → `claude-router:standard-executor` (Sonnet, max effort)
+- deep → `claude-router:deep-executor` (Opus)
 
-Passthrough behavior: when the classifier picks `standard` (Sonnet) — whether
-auto-classified or via `/route sonnet` / `/retry sonnet` — the hook emits only
-a `systemMessage` (e.g. `→ Sonnet (passthrough): ...`) and skips the routing
-directive. The parent model is overwhelmingly Sonnet already, so spawning a
-`standard-executor` would only add a Task hop without changing the model. Stats
-and session state are still updated; the Stop hook (`verify-routing.py`) sees
-no directive to enforce, so no Task call is required from you.
+Routing behavior: when the classifier picks a route, it spawns the corresponding
+subagent with a routing directive. For `standard` routes, the `standard-executor`
+runs Sonnet with max effort (vs. the parent model's low effort), enabling
+higher-quality output for standard-complexity tasks.
 
 Exceptions: Slash commands (`/route`, `/router-stats`, `/router-stats-reset`, `/swarm`, `/router-analytics`, `/retry`) and questions about the router itself.
 

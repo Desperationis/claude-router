@@ -90,15 +90,9 @@ FOLLOW_UP_PATTERNS = [
 # Must be preceded by whitespace or start of string
 SLASH_COMMAND_PATTERN = re.compile(r'(?:^|\s)/[a-zA-Z][a-zA-Z0-9_-]*')
 
-# Routes that should NOT spawn a subagent. The parent model in Claude Code is
-# (overwhelmingly) Sonnet, so when the classifier — or an explicit /route or
-# /retry — picks `standard`, spawning a `standard-executor` subagent only adds
-# a Task hop without changing the model. For these routes we skip the routing
-# directive entirely and let the parent model answer directly. Stats and
-# session state are still updated so cost-savings math and follow-up detection
-# remain accurate. The Stop hook (verify-routing.py) sees no directive and
-# does not enforce — that is the intended behavior here.
-PASSTHROUGH_ROUTES = {"standard"}
+# Routes that should NOT spawn a subagent. Currently empty.
+# Previously used for passthrough optimization when standard matched parent.
+PASSTHROUGH_ROUTES = set()
 
 
 def get_session_state() -> dict:
