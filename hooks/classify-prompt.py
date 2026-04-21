@@ -1063,15 +1063,10 @@ def _main_inner(input_data: dict):
     if not prompt or len(prompt) < 10:
         sys.exit(0)
 
-    # Check for slash commands anywhere in the prompt (e.g., /confirm, /route)
-    # If found, skip routing entirely - let the current model handle it
-    if SLASH_COMMAND_PATTERN.search(prompt):
-        cmd_match = SLASH_COMMAND_PATTERN.search(prompt)
-        cmd_name = cmd_match.group(0) if cmd_match else "/"
-        log_routing_decision("none", 1.0, "slash_command", [cmd_name], {"exception_type": "slash_commands"})
-        sys.exit(0)
-
-    # Handle slash commands (legacy path - prompts starting with /)
+    # Handle slash commands (legacy path - prompts starting with /).
+    # NOTE: This block MUST run before the anywhere-slash kill-switch below,
+    # otherwise the dedicated `/route`, `/retry`, and `/swarm` handlers are
+    # unreachable (they would be short-circuited by the generic match).
     stripped = prompt.strip().lower()
     if stripped.startswith("/"):
         # Special handling for /route with explicit model
@@ -1093,23 +1088,45 @@ def _main_inner(input_data: dict):
                 route, subagent, model = model_map[first_word]
                 query = " ".join(route_args.split()[1:])  # Rest after model
 
+                # Guard against empty queries - fail loudly rather than spawn
+                # a subagent with no prompt (silent billable hallucination).
+                if query.strip() == "":
+                    output = {
+                        "systemMessage": f"Usage: /route {first_word} <query> - no query provided"
+                    }
+                    print(json.dumps(output))
+                    sys.exit(0)
+
                 # Log explicit route command to stats
                 log_routing_decision(route, 1.0, "explicit", [f"/route {first_word}"], {"exception_type": "explicit_route"})
 
                 # Update session state for follow-up detection
                 update_session_state(route, {"explicit": True})
 
+                query_json = json.dumps(query)
                 context = f"""[Claude Router] EXPLICIT MODEL OVERRIDE
 Route: {route} | Model: {model} | Source: User specified "{first_word}"
 
 USER EXPLICITLY REQUESTED {model.upper()}. This is NOT a suggestion - it is a COMMAND.
 
-CRITICAL: Spawn "claude-router:{subagent}" with the query below. DO NOT reclassify. DO NOT override.
+HARD REQUIREMENT:
+  1. Your ONLY valid next action is a Task tool call with
+     subagent_type="claude-router:{subagent}" and prompt set to the EXACT
+     query string below (no paraphrasing, no rewriting, no reclassification).
+  2. After the subagent returns, relay its output. You may add a one-line
+     header; no other prose.
+  3. A Stop hook enforces this: if you answer directly, the stop is blocked
+     and you are forced to retry. Comply now.
 
-Query: {query}
+ORIGINAL QUERY (pass verbatim as the Task `prompt` param):
+{query_json}
 
-Example:
-Task(subagent_type="claude-router:{subagent}", prompt="{query}", description="Route to {model}")"""
+INVOKE THIS NOW:
+Task(
+  subagent_type="claude-router:{subagent}",
+  prompt={query_json},
+  description="Route to {model}"
+)"""
 
                 output = {
                     "systemMessage": f"→ Routing to {model} (explicit)",
@@ -1146,8 +1163,13 @@ Route: {route} | Model: {model} | Source: User specified "/retry {retry_args}"
 
 USER EXPLICITLY REQUESTED {model.upper()} FOR RETRY. This is NOT a suggestion - it is a COMMAND.
 
-CRITICAL: Read the last query from session state (~/.claude/router-session.json) and spawn "claude-router:{subagent}".
-DO NOT auto-escalate. DO NOT choose a different model. Use {model.upper()}.
+HARD REQUIREMENT:
+  1. Read the last query from session state (~/.claude/router-session.json)
+     and spawn "claude-router:{subagent}" with that query as the prompt.
+  2. DO NOT auto-escalate. DO NOT choose a different model. Use {model.upper()}.
+  3. A Stop hook enforces this: if no Task(subagent_type="claude-router:*")
+     call is found on your turn, the stop is blocked and you are forced to
+     retry. Comply now.
 
 Example:
 Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>", description="Retry with {model}")"""
@@ -1191,8 +1213,34 @@ Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>
         log_routing_decision("none", 1.0, "slash_command", [cmd_name], {"exception_type": "slash_commands"})
         sys.exit(0)
 
+    # Check for slash commands anywhere in the prompt (e.g., "please run
+    # /router-stats when done"). The prompt does NOT start with `/` here --
+    # that case was already handled above and dispatched to the dedicated
+    # /route, /retry, /swarm handlers or the generic slash-log exit. This
+    # catch handles embedded slash commands: skip routing entirely and let
+    # the current model handle it.
+    if SLASH_COMMAND_PATTERN.search(prompt):
+        cmd_match = SLASH_COMMAND_PATTERN.search(prompt)
+        cmd_name = cmd_match.group(0) if cmd_match else "/"
+        log_routing_decision("none", 1.0, "slash_command", [cmd_name], {"exception_type": "slash_commands"})
+        sys.exit(0)
+
     # Check for exception queries (router meta-questions)
     is_exception, exception_type = is_exception_query(prompt)
+
+    # Router meta-questions ("what does the router do?", "how does routing
+    # work?") are an explicit exception per the user-facing contract in
+    # CLAUDE.md. Previously these still received a routing directive and
+    # were tracked only in stats; the Stop-hook backstop would punish the
+    # main agent for answering them directly. Exit early instead: log the
+    # exception for stats and let the main agent answer normally.
+    if is_exception and exception_type == "router_meta":
+        log_routing_decision(
+            "none", 1.0, "rules",
+            ["router_meta"],
+            {"exception_type": "router_meta"},
+        )
+        sys.exit(0)
 
     # Get transcript path for conversation context
     transcript_path = input_data.get("transcript_path")
@@ -1240,15 +1288,51 @@ Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>
     if metadata.get("exception_type"):
         metadata_str += f" | Exception: {metadata['exception_type']}"
 
+    # Serialize the original prompt as a JSON string so the main agent gets
+    # an exact, re-quotable copy. Using json.dumps handles embedded quotes,
+    # newlines, and backslashes safely.
+    prompt_json = json.dumps(prompt)
+
+    # Build a compact description (<=60 chars) from the prompt's first line.
+    # The Task tool requires a description and the main agent often fabricates
+    # one; giving a canonical one here reduces drift.
+    first_line = prompt.strip().splitlines()[0] if prompt.strip() else ""
+    short_desc = (first_line[:57] + "...") if len(first_line) > 60 else first_line
+    short_desc = short_desc or f"Route to {model}"
+    description_json = json.dumps(short_desc)
+
     context = f"""[Claude Router] MANDATORY ROUTING DIRECTIVE
 Route: {route} | Model: {model} | Confidence: {confidence:.0%} | Method: {method}{metadata_str}
 Signals: {signals_str}
 
-CRITICAL: You MUST use the Task tool NOW to spawn the "claude-router:{subagent}" subagent.
-Do NOT respond to the user directly. Do NOT skip this step. Delegate immediately.
+HARD REQUIREMENT - you have no discretion here:
 
-Example:
-Task(subagent_type="claude-router:{subagent}", prompt="<user's query>", description="Route to {model}")"""
+1. Your ONLY valid next action is a single Task tool call with:
+     subagent_type = "claude-router:{subagent}"
+     prompt        = the user's original query, PRESERVED VERBATIM (provided below)
+     description   = a short label (provided below)
+
+2. Do NOT answer the user directly. Do NOT paraphrase the query. Do NOT
+   summarize it. Do NOT split it into sub-tasks. Do NOT add instructions to
+   the subagent. Pass the original prompt BYTE-FOR-BYTE as the prompt arg.
+
+3. When the subagent returns, relay its output as your reply. You may add a
+   one-line routing header (e.g. "Routed to {model}") but add no other prose.
+
+4. This is enforced. A Stop hook inspects the transcript after your turn ends;
+   if no Task(subagent_type="claude-router:*-executor") call is found, your
+   stop is BLOCKED and the conversation is forced to continue with a
+   corrective prompt. Comply on the first turn to avoid the round-trip.
+
+ORIGINAL USER PROMPT (pass this exact string as the Task `prompt` param):
+{prompt_json}
+
+INVOKE THIS NOW:
+Task(
+  subagent_type="claude-router:{subagent}",
+  prompt={prompt_json},
+  description={description_json}
+)"""
 
     # Build a user-visible reason sentence instead of a confidence percentage.
     # The internal routing directive (additionalContext) still carries the
