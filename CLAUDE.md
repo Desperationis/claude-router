@@ -4,7 +4,14 @@ When you receive a `[Claude Router] MANDATORY ROUTING DIRECTIVE`, you MUST:
 
 1. Use the Task tool IMMEDIATELY to spawn the specified subagent
 2. Do NOT respond to the user directly - delegate to the subagent
-3. Pass the user's original query in the prompt parameter
+3. Build the `prompt` parameter using the **context-enriched template** from
+   the directive: a `## Conversation context` section (your 1-3 sentence
+   synthesis from the cached transcript), an optional `## Recent focus`
+   bullet list, and a `## Current request` section containing the user's
+   verbatim query. The subagent has NO MEMORY of this conversation — the
+   context block is what gives it the situational awareness to do useful
+   work. The `## Current request` section is sacred (verbatim user query,
+   no edits); the context block above it is your synthesis.
 
 Subagent mapping:
 - fast → `claude-router:fast-executor`

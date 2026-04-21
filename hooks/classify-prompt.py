@@ -1174,22 +1174,41 @@ Route: {route} | Model: {model} | Source: User specified "{first_word}"
 
 USER EXPLICITLY REQUESTED {model.upper()}. This is NOT a suggestion - it is a COMMAND.
 
-HARD REQUIREMENT:
-  1. Your ONLY valid next action is a Task tool call with
-     subagent_type="claude-router:{subagent}" and prompt set to the EXACT
-     query string below (no paraphrasing, no rewriting, no reclassification).
-  2. After the subagent returns, relay its output. You may add a one-line
-     header; no other prose.
-  3. A Stop hook enforces this: if you answer directly, the stop is blocked
-     and you are forced to retry. Comply now.
+HARD REQUIREMENT - your only valid next action is a Task tool call.
 
-ORIGINAL QUERY (pass verbatim as the Task `prompt` param):
+1. Spawn Task(subagent_type="claude-router:{subagent}").
+
+2. The `prompt` parameter MUST follow this template EXACTLY:
+
+   ## Conversation context
+   <YOUR 1-3 sentence synthesis of what we are working on and any constraints
+    the subagent needs. The subagent has NO MEMORY of this conversation -
+    be specific. If fresh conversation with no prior context, write exactly:
+    "Fresh conversation, no prior context.">
+
+   ## Recent focus
+   <Bullet list of files, symbols, or in-flight decisions currently in play.
+    OMIT this section ENTIRELY (header included) if nothing is relevant.>
+
+   ## Current request
+   <User's verbatim query - see below, paste byte-for-byte, no edits>
+
+3. The `## Current request` section is sacred: user's exact words, no
+   paraphrasing or reclassification. The `## Conversation context` block
+   above it is YOUR synthesis from your cached transcript.
+
+4. After the subagent returns, relay its output. You may add a one-line
+   header; no other prose.
+
+5. A Stop hook enforces step 1: comply on the first turn.
+
+USER'S VERBATIM QUERY (paste under "## Current request"):
 {query_json}
 
 INVOKE THIS NOW:
 Task(
   subagent_type="claude-router:{subagent}",
-  prompt={query_json},
+  prompt=<your enriched prompt following the template above>,
   description="Route to {model}"
 )"""
 
@@ -1244,16 +1263,44 @@ Route: {route} | Model: {model} | Source: User specified "/retry {retry_args}"
 
 USER EXPLICITLY REQUESTED {model.upper()} FOR RETRY. This is NOT a suggestion - it is a COMMAND.
 
-HARD REQUIREMENT:
-  1. Read the last query from session state (~/.claude/router-session.json)
-     and spawn "claude-router:{subagent}" with that query as the prompt.
-  2. DO NOT auto-escalate. DO NOT choose a different model. Use {model.upper()}.
-  3. A Stop hook enforces this: if no Task(subagent_type="claude-router:*")
-     call is found on your turn, the stop is blocked and you are forced to
-     retry. Comply now.
+HARD REQUIREMENT - your only valid next action is a Task tool call.
 
-Example:
-Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>", description="Retry with {model}")"""
+1. Identify the user's PRIOR query in your conversation context - the most
+   recent user message before "/retry {retry_args}". That is the query to
+   retry. (~/.claude/router-session.json is a fallback if unclear, but the
+   cached transcript in front of you is the primary source.)
+
+2. Spawn Task(subagent_type="claude-router:{subagent}"). DO NOT auto-escalate.
+   DO NOT choose a different model. Use {model.upper()}.
+
+3. The `prompt` parameter MUST follow this template EXACTLY:
+
+   ## Conversation context
+   <YOUR 1-3 sentence synthesis explaining: this is a retry, what was
+    attempted before, why it was unsatisfactory, and what should be
+    different this time. The subagent has NO MEMORY of the prior attempt.>
+
+   ## Recent focus
+   <Bullet list of files, symbols, or in-flight decisions currently in play.
+    OMIT this section ENTIRELY if nothing is relevant.>
+
+   ## Current request
+   <The prior user query, verbatim - the exact query being retried>
+
+4. The `## Current request` section must contain the prior query verbatim.
+   The `## Conversation context` block above it is YOUR synthesis.
+
+5. After the subagent returns, relay its output. You may add a one-line
+   header; no other prose.
+
+6. A Stop hook enforces step 2: comply on the first turn.
+
+INVOKE THIS NOW:
+Task(
+  subagent_type="claude-router:{subagent}",
+  prompt=<your enriched prompt following the template above>,
+  description="Retry with {model}"
+)"""
 
                 output = {
                     "systemMessage": f"→ Retrying with {model} (explicit)",
@@ -1403,32 +1450,46 @@ Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>
 Route: {route} | Model: {model} | Confidence: {confidence:.0%} | Method: {method}{metadata_str}
 Signals: {signals_str}
 
-HARD REQUIREMENT - you have no discretion here:
+HARD REQUIREMENT - your only valid next action is a Task tool call.
 
-1. Your ONLY valid next action is a single Task tool call with:
-     subagent_type = "claude-router:{subagent}"
-     prompt        = the user's original query, PRESERVED VERBATIM (provided below)
-     description   = a short label (provided below)
+1. Spawn Task(subagent_type="claude-router:{subagent}").
 
-2. Do NOT answer the user directly. Do NOT paraphrase the query. Do NOT
-   summarize it. Do NOT split it into sub-tasks. Do NOT add instructions to
-   the subagent. Pass the original prompt BYTE-FOR-BYTE as the prompt arg.
+2. The `prompt` parameter MUST follow this template EXACTLY (three sections,
+   markdown headers as shown):
 
-3. When the subagent returns, relay its output as your reply. You may add a
-   one-line routing header (e.g. "Routed to {model}") but add no other prose.
+   ## Conversation context
+   <YOUR 1-3 sentence synthesis of what we are working on, recent decisions,
+    and any constraints the subagent needs. The subagent has NO MEMORY of
+    this conversation - be specific. If this is a fresh conversation with
+    no prior context, write exactly: "Fresh conversation, no prior context.">
 
-4. This is enforced. A Stop hook inspects the transcript after your turn ends;
-   if no Task(subagent_type="claude-router:*-executor") call is found, your
-   stop is BLOCKED and the conversation is forced to continue with a
-   corrective prompt. Comply on the first turn to avoid the round-trip.
+   ## Recent focus
+   <Bullet list of files, symbols, or in-flight decisions currently in play.
+    OMIT this section ENTIRELY (header included) if nothing is relevant.>
 
-ORIGINAL USER PROMPT (pass this exact string as the Task `prompt` param):
+   ## Current request
+   <The user's verbatim query - see "USER'S VERBATIM QUERY" below. Paste it
+    byte-for-byte. Do NOT paraphrase, summarize, or reformat the query itself.>
+
+3. The `## Current request` section is sacred: user's exact words, no edits.
+   The `## Conversation context` block above it is YOUR synthesis from your
+   cached transcript - that is the whole point of this template, since the
+   subagent gets a fresh context window with no memory.
+
+4. After the subagent returns, relay its output as your reply. You may add a
+   one-line routing header (e.g. "Routed to {model}") but no other prose.
+
+5. A Stop hook enforces step 1: if no Task(subagent_type="claude-router:*-executor")
+   call is found on your turn, the stop is BLOCKED and you are forced to retry.
+   Comply on the first turn to avoid the round-trip.
+
+USER'S VERBATIM QUERY (paste under "## Current request"):
 {prompt_json}
 
 INVOKE THIS NOW:
 Task(
   subagent_type="claude-router:{subagent}",
-  prompt={prompt_json},
+  prompt=<your enriched prompt following the template above>,
   description={description_json}
 )"""
 

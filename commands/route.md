@@ -64,9 +64,14 @@ Given $ARGUMENTS:
    - haiku/fast -> spawn "fast-executor" subagent
    - sonnet/standard -> **passthrough**: answer directly with the parent model (no subagent — parent is already Sonnet)
    - opus/deep -> spawn "deep-executor" subagent
-4. **Return** - Prefix the response with routing info
+4. **Build a context-enriched prompt** - The subagent gets a fresh context window with no memory of this conversation. The `prompt` parameter MUST follow this template:
+   - `## Conversation context` - YOUR 1-3 sentence synthesis from the cached transcript (what we are working on, recent decisions, constraints). If fresh conversation, write "Fresh conversation, no prior context."
+   - `## Recent focus` - bullet list of files/symbols/decisions in play. Omit the section entirely if nothing is relevant.
+   - `## Current request` - the user's verbatim query, byte-for-byte. No paraphrasing.
+5. **Return** - Prefix the response with routing info
 
 **DO NOT override explicit model choices. The user's selection is final.**
+**DO NOT skip the context block.** A naked query gives the subagent no idea what it is doing.
 
 ## Examples
 

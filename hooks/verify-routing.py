@@ -163,9 +163,12 @@ def extract_attachment_directive(entry: dict) -> str | None:
 SUBAGENT_TOOL_NAMES = {"Task", "Agent"}
 
 
-def find_task_call(entry: dict) -> str | None:
+def find_task_call(entry: dict, expected_target: str | None = None) -> str | None:
     """If entry is an assistant message with a claude-router subagent tool_use,
     return the subagent_type. Otherwise return None.
+
+    If expected_target is provided, only return a match if the subagent_type
+    matches that specific target (after normalization).
     """
     if entry.get("type") != "assistant":
         return None
@@ -183,8 +186,29 @@ def find_task_call(entry: dict) -> str | None:
             continue
         tool_input = part.get("input") or {}
         st = tool_input.get("subagent_type")
-        if isinstance(st, str) and st.strip().lower().startswith(SUBAGENT_PREFIX):
+        if isinstance(st, str):
+            normalized = re.sub(r'\s+', '', st).lower()
+            if not normalized.startswith(SUBAGENT_PREFIX):
+                continue
+            # If an expected target was specified, verify this matches it.
+            if expected_target is not None:
+                expected_normalized = re.sub(r'\s+', '', expected_target).lower()
+                if normalized != expected_normalized:
+                    continue
             return st
+    return None
+
+
+def extract_expected_target(directive_text: str) -> str | None:
+    """Extract the expected target subagent from the directive text.
+
+    Looks for patterns like "Route: deep" or "Route: fast" in the directive,
+    and returns the corresponding claude-router:*-executor value. Returns None
+    if the target cannot be determined.
+    """
+    match = DIRECTIVE_SUBAGENT_RE.search(directive_text)
+    if match:
+        return match.group(0)
     return None
 
 
@@ -192,16 +216,22 @@ def build_block_reason(directive_text: str) -> str:
     """Craft a corrective reason that quotes the directive back at the agent."""
     # Try to pull the subagent name out of the directive so the reason is
     # concrete instead of hand-wavy.
-    match = DIRECTIVE_SUBAGENT_RE.search(directive_text)
-    target = match.group(0) if match else "claude-router:<executor>"
+    target = extract_expected_target(directive_text)
+    if not target:
+        target = "claude-router:<executor>"
 
     return (
         f"You ignored the MANDATORY ROUTING DIRECTIVE. The UserPromptSubmit "
         f"hook instructed you to delegate via Task(subagent_type=\"{target}\"), "
         f"but you answered directly instead. Invoke the Task tool NOW with "
-        f"subagent_type=\"{target}\", passing the user's original query as the "
-        f"prompt parameter. Return only the subagent's output. Do not answer "
-        f"the user directly. This is enforced by the claude-router Stop hook."
+        f"subagent_type=\"{target}\". The `prompt` parameter MUST follow the "
+        f"context-enriched template from the directive: a `## Conversation "
+        f"context` section (your 1-3 sentence synthesis from cached transcript), "
+        f"an optional `## Recent focus` bullet list, and a `## Current request` "
+        f"section containing the user's verbatim query. The subagent has no "
+        f"memory of this conversation - the context block is what makes it "
+        f"useful. Return only the subagent's output. Do not answer the user "
+        f"directly. This is enforced by the claude-router Stop hook."
     )
 
 
@@ -248,8 +278,9 @@ def _main_inner():
             if d:
                 directive_text = d
                 continue
-        if task_subagent is None:
-            s = find_task_call(entry)
+        if task_subagent is None and directive_text is not None:
+            expected_target = extract_expected_target(directive_text)
+            s = find_task_call(entry, expected_target=expected_target)
             if s:
                 task_subagent = s
 
@@ -258,7 +289,7 @@ def _main_inner():
         sys.exit(0)
 
     # Router-meta queries are explicitly exempt from Stop enforcement.
-    if EXCEPTION_SKIP_MARKER in directive_text:
+    if re.search(r'\|\s*Exception:\s*router_meta\b', directive_text):
         sys.exit(0)
 
     # Directive was emitted AND a matching Task call happened - all good.
