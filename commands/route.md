@@ -62,7 +62,7 @@ Given $ARGUMENTS:
 2. **Classify** (only if no explicit model) - Determine if it's fast, standard, or deep
 3. **Route** - Use the Task tool to spawn the appropriate subagent:
    - haiku/fast -> spawn "fast-executor" subagent
-   - sonnet/standard -> spawn "standard-executor" subagent
+   - sonnet/standard -> **passthrough**: answer directly with the parent model (no subagent — parent is already Sonnet)
    - opus/deep -> spawn "deep-executor" subagent
 4. **Return** - Prefix the response with routing info
 

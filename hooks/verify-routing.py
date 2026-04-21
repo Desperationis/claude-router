@@ -157,8 +157,14 @@ def extract_attachment_directive(entry: dict) -> str | None:
     return None
 
 
+# Claude Code has used both "Task" and "Agent" as the tool name for spawning
+# subagents across versions. Accept either — the discriminator is the
+# subagent_type field, not the tool name.
+SUBAGENT_TOOL_NAMES = {"Task", "Agent"}
+
+
 def find_task_call(entry: dict) -> str | None:
-    """If entry is an assistant message with a claude-router Task tool_use,
+    """If entry is an assistant message with a claude-router subagent tool_use,
     return the subagent_type. Otherwise return None.
     """
     if entry.get("type") != "assistant":
@@ -173,7 +179,7 @@ def find_task_call(entry: dict) -> str | None:
             continue
         if part.get("type") != "tool_use":
             continue
-        if part.get("name") != "Task":
+        if part.get("name") not in SUBAGENT_TOOL_NAMES:
             continue
         tool_input = part.get("input") or {}
         st = tool_input.get("subagent_type")

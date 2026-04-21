@@ -116,7 +116,9 @@ def main():
         sys.exit(0)
 
     tool_name = payload.get("tool_name") or payload.get("toolName") or ""
-    if tool_name != "Task":
+    # Claude Code has used both "Task" and "Agent" as the subagent tool name
+    # across versions. Accept either.
+    if tool_name not in ("Task", "Agent"):
         sys.exit(0)
 
     tool_input = payload.get("tool_input") or payload.get("toolInput") or {}

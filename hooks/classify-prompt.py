@@ -90,6 +90,16 @@ FOLLOW_UP_PATTERNS = [
 # Must be preceded by whitespace or start of string
 SLASH_COMMAND_PATTERN = re.compile(r'(?:^|\s)/[a-zA-Z][a-zA-Z0-9_-]*')
 
+# Routes that should NOT spawn a subagent. The parent model in Claude Code is
+# (overwhelmingly) Sonnet, so when the classifier — or an explicit /route or
+# /retry — picks `standard`, spawning a `standard-executor` subagent only adds
+# a Task hop without changing the model. For these routes we skip the routing
+# directive entirely and let the parent model answer directly. Stats and
+# session state are still updated so cost-savings math and follow-up detection
+# remain accurate. The Stop hook (verify-routing.py) sees no directive and
+# does not enforce — that is the intended behavior here.
+PASSTHROUGH_ROUTES = {"standard"}
+
 
 def get_session_state() -> dict:
     """Get the current session state for multi-turn context awareness."""
@@ -1041,6 +1051,47 @@ def build_routing_reason(result: dict) -> str:
     return defaults.get(route, "router default")
 
 
+def emit_passthrough(route: str, model: str, source: str, metadata: dict | None = None,
+                     reason: str | None = None) -> None:
+    """Emit a passthrough decision (no subagent spawn) and exit.
+
+    Used when the chosen route matches the parent model — currently `standard`
+    (Sonnet), since the parent is almost always Sonnet too. We still:
+      - log the route to stats (with passthrough=True so it's distinguishable
+        from real subagent routing in analytics),
+      - update session state so follow-up detection sees the correct prior route,
+      - surface a systemMessage so the user sees the routing decision.
+
+    We do NOT emit `additionalContext`, so no MANDATORY ROUTING DIRECTIVE is
+    attached — the Stop hook sees nothing to enforce and the parent model
+    answers the user directly.
+
+    Args:
+        route: The classified route ("standard"), used for stats + session.
+        model: Display name for the systemMessage (e.g. "Sonnet").
+        source: Short tag for the systemMessage suffix
+                (e.g. "auto", "explicit", "retry").
+        metadata: Extra metadata to merge into the stats entry. `passthrough`
+                  is always set to True regardless of caller input.
+        reason: Optional short reason string for the systemMessage. If omitted,
+                a generic one is built from the source.
+    """
+    md = dict(metadata or {})
+    md["passthrough"] = True
+
+    log_routing_decision(route, 1.0, "passthrough", [f"passthrough:{source}"], md)
+    update_session_state(route, md)
+
+    if not reason:
+        reason = f"using parent model ({source})"
+
+    output = {
+        "systemMessage": f"\u2192 {model} (passthrough): {reason}",
+    }
+    print(json.dumps(output))
+    sys.exit(0)
+
+
 def main():
     """Main hook handler."""
     try:
@@ -1097,6 +1148,20 @@ def _main_inner(input_data: dict):
                     print(json.dumps(output))
                     sys.exit(0)
 
+                # Passthrough optimization: if the user explicitly asks for the
+                # parent model (Sonnet), do not spawn a standard-executor —
+                # that would just be the same model with an extra Task hop.
+                # Stats are still tagged as explicit_route for parity with the
+                # subagent path; passthrough=True distinguishes it in analytics.
+                if route in PASSTHROUGH_ROUTES:
+                    emit_passthrough(
+                        route=route,
+                        model=model,
+                        source=f"/route {first_word}",
+                        metadata={"explicit": True, "exception_type": "explicit_route"},
+                        reason=f'user requested "{first_word}", parent already Sonnet',
+                    )
+
                 # Log explicit route command to stats
                 log_routing_decision(route, 1.0, "explicit", [f"/route {first_word}"], {"exception_type": "explicit_route"})
 
@@ -1151,6 +1216,22 @@ Task(
 
             if retry_args in retry_model_map:
                 route, subagent, model = retry_model_map[retry_args]
+
+                # Passthrough optimization for /retry: same logic as /route —
+                # if the requested retry model matches the parent, do not spawn
+                # a subagent. Note: the user has to re-issue the original query
+                # themselves in this case, since there is no executor context
+                # to read it from. The systemMessage flags this clearly.
+                if route in PASSTHROUGH_ROUTES:
+                    emit_passthrough(
+                        route=route,
+                        model=model,
+                        source=f"/retry {retry_args}",
+                        metadata={"explicit": True, "retry": True,
+                                  "exception_type": "explicit_retry"},
+                        reason=(f'/retry {retry_args} with parent already '
+                                f'Sonnet — re-state your query to retry'),
+                    )
 
                 # Log explicit retry command to stats
                 log_routing_decision(route, 1.0, "explicit", [f"/retry {retry_args}"], {"exception_type": "explicit_retry"})
@@ -1260,18 +1341,35 @@ Task(subagent_type="claude-router:{subagent}", prompt="<last query from session>
     if is_exception:
         metadata["exception_type"] = exception_type
 
-    # Log routing decision to stats
-    log_routing_decision(route, confidence, method, signals, metadata)
-
-    # Update session state for multi-turn context awareness
-    update_session_state(route, metadata)
-
     # Map route to subagent and model
     # Note: /swarm is explicit - complex tasks route to deep-executor, user invokes /swarm for parallel agents
     subagent_map = {"fast": "fast-executor", "standard": "standard-executor", "deep": "deep-executor"}
     model_map = {"fast": "Haiku", "standard": "Sonnet", "deep": "Opus"}
     subagent = subagent_map[route]
     model = model_map[route]
+
+    # Passthrough optimization: if the auto-classifier picked `standard`
+    # (Sonnet), skip the subagent spawn — the parent model is overwhelmingly
+    # already Sonnet, so a standard-executor adds a Task hop with no model
+    # change. emit_passthrough handles stats logging and session state, then
+    # exits without emitting the routing directive (so the Stop hook sees
+    # nothing to enforce). The reason string reuses build_routing_reason so
+    # users see the same classification rationale they would have under
+    # subagent routing.
+    if route in PASSTHROUGH_ROUTES:
+        emit_passthrough(
+            route=route,
+            model=model,
+            source=method,  # "rules", "haiku-llm", "haiku-cli", etc.
+            metadata=metadata,
+            reason=build_routing_reason(result),
+        )
+
+    # Log routing decision to stats
+    log_routing_decision(route, confidence, method, signals, metadata)
+
+    # Update session state for multi-turn context awareness
+    update_session_state(route, metadata)
 
     signals_str = ", ".join(signals)
 

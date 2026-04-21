@@ -8,8 +8,16 @@ When you receive a `[Claude Router] MANDATORY ROUTING DIRECTIVE`, you MUST:
 
 Subagent mapping:
 - fast → `claude-router:fast-executor`
-- standard → `claude-router:standard-executor`
 - deep → `claude-router:deep-executor`
+- standard → **passthrough** (parent model handles it; no directive emitted)
+
+Passthrough behavior: when the classifier picks `standard` (Sonnet) — whether
+auto-classified or via `/route sonnet` / `/retry sonnet` — the hook emits only
+a `systemMessage` (e.g. `→ Sonnet (passthrough): ...`) and skips the routing
+directive. The parent model is overwhelmingly Sonnet already, so spawning a
+`standard-executor` would only add a Task hop without changing the model. Stats
+and session state are still updated; the Stop hook (`verify-routing.py`) sees
+no directive to enforce, so no Task call is required from you.
 
 Exceptions: Slash commands (`/route`, `/router-stats`, `/router-stats-reset`, `/swarm`, `/router-analytics`, `/retry`) and questions about the router itself.
 

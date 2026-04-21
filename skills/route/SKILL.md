@@ -30,9 +30,9 @@ Parse $ARGUMENTS to extract the model and query:
 3. **Validate** - If no valid model is specified, show usage help
 4. **Route IMMEDIATELY** - Use the Task tool to spawn the appropriate subagent:
    - haiku/fast -> spawn "fast-executor" subagent with model: haiku
-   - sonnet/standard -> spawn "standard-executor" subagent with model: sonnet
+   - sonnet/standard -> **passthrough** (parent model is already Sonnet — answer directly, do NOT spawn a subagent)
    - opus/deep -> spawn "deep-executor" subagent with model: opus
-5. **Return** - Prefix the response with the model used
+5. **Return** - Prefix the response with the model used (e.g. "Sonnet (passthrough)")
 
 **DO NOT:**
 - Analyze query complexity
@@ -47,7 +47,7 @@ The user said which model. Use that model. Period.
 | Argument | Executor | Model |
 |----------|----------|-------|
 | `haiku` or `fast` | fast-executor | Haiku |
-| `sonnet` or `standard` | standard-executor | Sonnet |
+| `sonnet` or `standard` | *passthrough* (no subagent — parent answers) | Sonnet |
 | `opus` or `deep` | deep-executor | Opus |
 
 ## Examples
@@ -68,7 +68,7 @@ Result: Routes to Haiku (fast-executor) for cost savings.
 ```
 /route sonnet Design a caching system
 ```
-Result: Routes to Sonnet (standard-executor).
+Result: Passthrough — the parent model (already Sonnet) answers directly. No subagent is spawned because that would just add a Task hop without changing the model.
 
 ## Error Handling
 
